@@ -1,0 +1,92 @@
+# BettaFish-skill CI
+#
+# 作用: 在每次提交/PR 时自动校验核心脚本、报告模板与评测用例。
+# 特点:
+#   - 测试套件基于标准库 unittest, 默认零第三方依赖即可运行 (离线、快速)
+#   - 可作为「可复用工作流」被其他仓库/工作流调用 (workflow_call)
+#   - 支持手动触发 (workflow_dispatch), 并可选安装完整渲染环境
+#
+# 调用示例 (workflow_call):
+#   jobs:
+#     ci:
+#       uses: XiaoMaColtAI/BettaFish-skill/.github/workflows/ci.yml@main
+#       with:
+#         python-version: "3.11"
+#         run-integration: false
+
+name: CI - BettaFish Skill Tests
+
+on:
+  push:
+    branches: ["main", "arena/**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: "Python 版本"
+        required: false
+        default: "3.11"
+      run-integration:
+        description: "是否安装完整渲染环境 (LibreOffice / Poppler) 进行集成验证"
+        type: boolean
+        required: false
+        default: false
+  workflow_call:
+    inputs:
+      python-version:
+        description: "Python 版本"
+        required: false
+        type: string
+        default: "3.11"
+      run-integration:
+        description: "是否安装完整渲染环境进行集成验证"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Python ${{ inputs.python-version || '3.11' }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version || '3.11' }}
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # 测试运行器: 优先 pytest, 回退到标准库 unittest
+          pip install pytest || true
+
+      - name: Install full render environment (optional)
+        if: ${{ inputs.run-integration == true }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libreoffice poppler-utils
+
+      - name: Syntax check (all scripts)
+        run: |
+          python -m compileall -q scripts subskills || true
+          echo "compileall done"
+
+      - name: Run test suite
+        run: |
+          if python -c "import pytest" 2>/dev/null; then
+            pytest tests/ -v
+          else
+            python -m unittest discover -s tests -t . -p "test_*.py" -v
+          fi
+
+      - name: Validate evals structure
+        run: python -m unittest tests.test_evals -v
