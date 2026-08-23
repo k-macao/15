@@ -298,12 +298,18 @@ def build_insight(topic: str, offline: bool = False, limit: int = DEFAULT_LIMIT)
 def _sentiment_badge(label: str) -> str:
     color = {"positive": "#64ffda", "negative": "#ff6b6b", "neutral": "#8892b0"}.get(label, "#8892b0")
     return (
-        f'<span style="color:{color};border:1px solid {color};border-radius:4px;'
-        f'padding:1px 6px;font-size:0.75rem;">{SENTIMENT_ZH.get(label, label)}</span>'
+        f'<span class="meta-badge" style="color:{color};">'
+        f'{SENTIMENT_ZH.get(label, label)}</span>'
     )
 
 
 def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
+    """Render a compact but editorial, paginated HTML briefing.
+
+    The WeChat page is intentionally self-contained: CSS carries the visual
+    system and a small amount of vanilla JS handles paging and keyboard
+    navigation, so the generated artifact works when opened as a local file.
+    """
     sentiment = data.get("sentiment") or {}
     heat = data.get("heat") or {}
     platforms = data.get("platform_stats") or {}
@@ -316,174 +322,397 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     data_source = data.get("data_source") or "unknown"
     source_label = "实时 RSS 抓取" if data_source == "rss_news" else "离线示例数据"
 
-    # --- sentiment stacked bar ---
-    pos, neg, neu = (
-        sentiment.get("positive", 0),
-        sentiment.get("negative", 0),
-        sentiment.get("neutral", 0),
-    )
+    # --- shared values ---
+    pos = int(sentiment.get("positive", 0) or 0)
+    neg = int(sentiment.get("negative", 0) or 0)
+    neu = int(sentiment.get("neutral", 0) or 0)
     total = max(pos + neg + neu, 1)
-    pos_pct, neg_pct = round(pos / total * 100), round(neg / total * 100)
+    pos_pct = round(pos / total * 100)
+    neg_pct = round(neg / total * 100)
     neu_pct = 100 - pos_pct - neg_pct
-    sentiment_bar = (
-        '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin:10px 0;">'
-        f'<div style="width:{pos_pct}%;background:#64ffda;"></div>'
-        f'<div style="width:{neu_pct}%;background:#8892b0;"></div>'
-        f'<div style="width:{neg_pct}%;background:#ff6b6b;"></div>'
-        "</div>"
+    pos_deg = round(pos / total * 360, 2)
+    neu_end_deg = round((pos + neu) / total * 360, 2)
+    dominant = SENTIMENT_ZH.get(sentiment.get("dominant", "neutral"), "中性")
+    risk_count = len(risks)
+    mention_count = int(heat.get("total_mentions", len(posts)) or 0)
+
+    # --- channel bars and table ---
+    platform_items = list(platforms.items())[:8]
+    max_platform_count = max(
+        (int(stats.get("count", 0) or 0) for _name, stats in platform_items),
+        default=1,
     )
+    channel_bars = "".join(
+        f'''<div class="channel-row">
+          <div class="channel-label"><span>{_escape(name)}</span><b>{_escape(stats.get("count", 0))}</b></div>
+          <div class="channel-track"><i style="width:{max(int(stats.get("count", 0) or 0) / max_platform_count * 100, 8)}%"></i></div>
+          <span class="channel-share">{_escape(stats.get("percentage", 0))}%</span>
+        </div>'''
+        for name, stats in platform_items
+    ) or '<p class="muted">暂无平台数据</p>'
+    channel_rows = "".join(
+        f'''<tr><td>{_escape(name)}</td><td>{_escape(stats.get("count", 0))}</td>
+        <td>{_escape(stats.get("percentage", 0))}%</td>
+        <td>{_escape(stats.get("avg_engagement", 0))}</td></tr>'''
+        for name, stats in platform_items
+    ) or '<tr><td colspan="4">暂无平台数据</td></tr>'
+
+    # --- trend bars ---
+    trend_items = trend[-7:]
+    max_trend_count = max((int(item.get("count", 0) or 0) for item in trend_items), default=1)
+    trend_bars = "".join(
+        f'''<div class="trend-row">
+          <time>{_escape(item.get("date", ""))}</time>
+          <div class="trend-track"><i style="width:{max(int(item.get("count", 0) or 0) / max_trend_count * 100, 7)}%"></i></div>
+          <b>{_escape(item.get("count", 0))}</b>
+        </div>'''
+        for item in trend_items
+    ) or '<p class="muted">当前样本暂无可用趋势数据。</p>'
 
     # --- keyword chips ---
     chips = "".join(
-        f'<span class="chip">{_escape(k)}</span>' for k in keywords[:10]
-    ) or '<span class="chip">暂无关键词</span>'
-
-    # --- platform table ---
-    rows = []
-    for name, stats in list(platforms.items())[:8]:
-        rows.append(
-            "<tr>"
-            f"<td>{_escape(name)}</td>"
-            f"<td>{_escape(stats.get('count', 0))}</td>"
-            f"<td>{_escape(stats.get('percentage', 0))}%</td>"
-            "</tr>"
-        )
-    table_body = "\n".join(rows) or "<tr><td colspan='3'>暂无平台数据</td></tr>"
-
-    # --- trend mini bars ---
-    trend_html = ""
-    if len(trend) > 1:
-        max_count = max(t["count"] for t in trend) or 1
-        bars = "".join(
-            '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">'
-            f'<span style="color:#8892b0;font-size:0.8rem;min-width:82px;">{_escape(t["date"])}</span>'
-            f'<div style="height:10px;border-radius:5px;background:#64ffda;'
-            f'width:{max(int(t["count"] / max_count * 100), 6)}%;max-width:70%;"></div>'
-            f'<span style="font-size:0.8rem;">{t["count"]}</span>'
-            "</div>"
-            for t in trend[-7:]
-        )
-        trend_html = f'<div class="card"><h2>📈 声量趋势</h2>{bars}</div>'
+        f'<span class="keyword">{_escape(keyword)}</span>' for keyword in keywords[:10]
+    ) or '<span class="muted">暂无关键词</span>'
 
     # --- risks ---
     if risks:
         risk_items = "".join(
-            "<li>"
-            f'<span style="color:{RISK_COLOR.get(r.get("risk_level"), "#8892b0")};font-weight:bold;">'
-            f'[{RISK_ZH.get(r.get("risk_level"), r.get("risk_level"))}]</span> '
-            f'{_escape(r.get("text_preview", ""))}'
-            + (
-                f' <span class="meta">（命中：{_escape("、".join(r.get("matched_keywords", [])))}）</span>'
-                if r.get("matched_keywords")
-                else ""
-            )
-            + "</li>"
-            for r in risks[:5]
+            f'''<li class="risk-item risk-{_escape(risk.get("risk_level", "low"))}">
+              <span class="risk-level">{_escape(RISK_ZH.get(risk.get("risk_level"), risk.get("risk_level", "低")))}</span>
+              <div><strong>{_escape(risk.get("text_preview", ""))}</strong>
+              {f'<small>命中：{_escape("、".join(risk.get("matched_keywords", [])))}</small>' if risk.get("matched_keywords") else ""}</div>
+            </li>'''
+            for risk in risks[:5]
         )
-        risk_html = f"<ul>{risk_items}</ul>"
     else:
-        risk_html = '<p class="meta">未识别到明显风险信号。</p>'
+        risk_items = '<li class="empty-state">未识别到明显风险信号。</li>'
 
     # --- findings ---
-    finding_items = "".join(f"<li>{_escape(f)}</li>" for f in findings[:6]) or "<li>暂无条目</li>"
+    finding_items = "".join(
+        f'<li><span>{index:02d}</span><p>{_escape(finding)}</p></li>'
+        for index, finding in enumerate(findings[:6], 1)
+    ) or '<li class="empty-state">暂无要点</li>'
 
     # --- linked sources ---
-    source_items = []
-    for p in posts[:10]:
-        title = p.get("title") or p.get("content") or ""
-        url = p.get("url") or "#"
-        source_items.append(
-            '<li style="margin:8px 0;">'
-            f'<a href="{_escape(url)}" target="_blank">{_escape(title[:70])}</a><br>'
-            f'<span class="meta">{_escape(p.get("nickname", ""))} · {_escape(p.get("timestamp", ""))}</span> '
-            f'{_sentiment_badge(p.get("sentiment", "neutral"))}'
-            "</li>"
-        )
-    sources_html = "".join(source_items) or "<li>暂无信源</li>"
+    source_items = "".join(
+        f'''<li class="source-item">
+          <span class="source-index">{index:02d}</span>
+          <div><a href="{_escape(post.get("url") or "#")}" target="_blank" rel="noopener">{_escape((post.get("title") or post.get("content") or "")[:90])}</a>
+          <small>{_escape(post.get("nickname", ""))} <em>·</em> {_escape(post.get("timestamp", ""))}</small></div>
+          {_sentiment_badge(post.get("sentiment", "neutral"))}
+        </li>'''
+        for index, post in enumerate(posts[:10], 1)
+    ) or '<li class="empty-state">暂无信源</li>'
 
-    return f"""<!DOCTYPE html>
+    css = r'''
+    :root {
+      --ink: #0a192f;
+      --ink-deep: #061222;
+      --surface: #10243f;
+      --surface-raised: #172e4e;
+      --line: rgba(202, 215, 228, .18);
+      --line-strong: rgba(255, 215, 0, .54);
+      --cream: #f4f0e7;
+      --muted: #9eacbd;
+      --gold: #ffd700;
+      --gold-soft: #e8c64e;
+      --mint: #64ffda;
+      --coral: #ff7777;
+      --display: 'Playfair Display', 'Noto Serif SC', Georgia, serif;
+      --body: 'Source Serif Pro', 'Noto Serif SC', Georgia, serif;
+      --mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--ink-deep); scroll-behavior: smooth; }
+    body {
+      min-width: 320px; margin: 0; color: var(--cream); background: var(--ink);
+      font-family: var(--body); font-size: 16px; line-height: 1.65;
+      background-image:
+        radial-gradient(ellipse at 12% 10%, rgba(100,255,218,.08), transparent 34%),
+        radial-gradient(ellipse at 88% 82%, rgba(255,215,0,.06), transparent 32%),
+        linear-gradient(135deg, rgba(255,255,255,.015) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.012) 50%, rgba(255,255,255,.012) 75%, transparent 75%);
+      background-size: auto, auto, 6px 6px;
+    }
+    body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 20; opacity: .035;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E"); mix-blend-mode: screen; }
+    a { color: var(--mint); text-decoration: none; }
+    a:hover { color: var(--gold); }
+    button { font: inherit; }
+    .report-shell { display: flex; max-width: 1540px; min-height: 100vh; margin: 0 auto; }
+    .sidebar { position: fixed; z-index: 10; inset: 0 auto 0 0; width: 248px; display: flex; flex-direction: column;
+      padding: 38px 26px 26px; border-right: 1px solid var(--line); background: rgba(6,18,34,.72); backdrop-filter: blur(18px); }
+    .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 62px; color: var(--cream); font-family: var(--display); font-size: 18px; letter-spacing: .02em; }
+    .brand-mark { width: 25px; height: 25px; position: relative; display: grid; place-items: center; border: 1px solid var(--gold); transform: rotate(45deg); }
+    .brand-mark::after { content: ''; width: 7px; height: 7px; background: var(--mint); }
+    .brand-mark + span { transform: translateY(-1px); }
+    .side-label { color: var(--gold); font-family: var(--mono); font-size: 10px; letter-spacing: .18em; text-transform: uppercase; }
+    .nav-menu { display: grid; gap: 10px; margin: 15px 0 0; padding: 0; list-style: none; }
+    .nav-menu a { position: relative; display: flex; align-items: baseline; gap: 13px; padding: 8px 0 8px 16px; color: var(--muted); font-size: 14px; transition: color .25s, transform .25s; }
+    .nav-menu a::before { content: ''; position: absolute; left: 0; top: 17px; width: 0; height: 1px; background: var(--gold); transition: width .25s; }
+    .nav-menu a span { color: rgba(255,255,255,.28); font-family: var(--mono); font-size: 10px; }
+    .nav-menu a:hover, .nav-menu a.active { color: var(--cream); transform: translateX(5px); }
+    .nav-menu a.active::before { width: 9px; }
+    .nav-menu a.active span { color: var(--gold); }
+    .side-foot { margin-top: auto; color: var(--muted); font-family: var(--mono); font-size: 10px; line-height: 1.8; }
+    .side-foot strong { display: block; margin-bottom: 5px; color: var(--mint); font-weight: 400; }
+    .main-content { width: calc(100% - 248px); margin-left: 248px; }
+    .page { display: none; min-height: 100vh; padding: 54px 7vw 76px; }
+    .page.active { display: block; animation: page-in .65s cubic-bezier(.16,1,.3,1) both; }
+    .page-inner { max-width: 1100px; margin: 0 auto; }
+    .page-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 54px; color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+    .page-top .rule { width: 88px; height: 1px; background: var(--line-strong); }
+    .eyebrow { display: flex; align-items: center; gap: 12px; color: var(--gold); font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; }
+    .eyebrow::before { content: ''; display: inline-block; width: 30px; height: 1px; background: var(--gold); }
+    h1, h2, h3, p { margin-top: 0; }
+    .hero { min-height: 67vh; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(230px, .8fr); align-items: center; gap: 7vw; padding: 4vh 0 9vh; }
+    .hero h1 { max-width: 780px; margin: 28px 0 25px; color: var(--cream); font-family: var(--display); font-size: clamp(42px, 6.4vw, 92px); font-weight: 500; line-height: 1.02; letter-spacing: -.045em; }
+    .hero h1 em { color: var(--gold); font-style: normal; }
+    .hero-deck { max-width: 550px; color: #bdc8d5; font-size: 19px; line-height: 1.7; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 38px; color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .06em; }
+    .hero-meta b { color: var(--mint); font-weight: 400; }
+    .hero-art { position: relative; min-height: 385px; display: grid; place-items: center; }
+    .hero-art::before, .hero-art::after { content: ''; position: absolute; border: 1px solid rgba(255,215,0,.45); border-radius: 50%; transform: rotate(-25deg); }
+    .hero-art::before { width: 275px; height: 410px; }
+    .hero-art::after { width: 370px; height: 190px; border-color: rgba(100,255,218,.28); transform: rotate(31deg); }
+    .orbit-core { position: relative; z-index: 1; width: 178px; height: 178px; display: grid; place-items: center; border: 1px solid var(--gold); border-radius: 50%; background: radial-gradient(circle at 35% 30%, rgba(100,255,218,.25), rgba(10,25,47,.1) 54%, rgba(255,215,0,.09)); box-shadow: 0 0 70px rgba(100,255,218,.08); text-align: center; }
+    .orbit-core b { display: block; color: var(--gold); font-family: var(--display); font-size: 48px; font-weight: 500; line-height: 1; }
+    .orbit-core span { display: block; margin-top: 10px; color: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: .16em; }
+    .orbit-dot { position: absolute; z-index: 2; width: 9px; height: 9px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 5px rgba(100,255,218,.12), 0 0 22px var(--mint); }
+    .orbit-dot.one { top: 36px; right: 17%; } .orbit-dot.two { bottom: 55px; left: 17%; background: var(--gold); box-shadow: 0 0 0 5px rgba(255,215,0,.12), 0 0 22px var(--gold); }
+    .section-intro { display: flex; align-items: end; justify-content: space-between; gap: 35px; margin-bottom: 31px; border-bottom: 1px solid var(--line); padding-bottom: 19px; }
+    .section-intro h2 { margin: 8px 0 0; font-family: var(--display); font-size: clamp(30px, 4vw, 52px); font-weight: 500; line-height: 1.08; letter-spacing: -.035em; }
+    .section-intro > p { max-width: 320px; margin-bottom: 4px; color: var(--muted); font-size: 14px; }
+    .overview-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 20px; align-items: stretch; }
+    .note { padding: 28px 30px; border-left: 2px solid var(--gold); background: linear-gradient(100deg, rgba(255,215,0,.09), transparent 70%); }
+    .note h3 { margin-bottom: 16px; font-family: var(--display); font-size: 25px; font-weight: 500; }
+    .note p { margin-bottom: 0; color: #c6d0dc; font-size: 16px; }
+    .snapshot { display: flex; flex-direction: column; justify-content: space-between; padding: 25px; border: 1px solid var(--line); background: rgba(23,46,78,.5); }
+    .snapshot-label { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
+    .snapshot strong { display: block; margin: 14px 0 3px; color: var(--mint); font-family: var(--display); font-size: 38px; font-weight: 500; }
+    .snapshot small { color: var(--muted); }
+    .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 48px; }
+    .metric { min-height: 140px; padding: 20px; border-top: 1px solid var(--line-strong); background: rgba(16,36,63,.62); transition: transform .25s, background .25s; }
+    .metric:hover, .panel:hover { transform: translateY(-4px); background: rgba(23,46,78,.8); }
+    .metric-label { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+    .metric-value { display: block; margin: 11px 0 1px; color: var(--cream); font-family: var(--display); font-size: 34px; font-weight: 500; line-height: 1; }
+    .metric-note { color: var(--muted); font-size: 12px; }
+    .metric.accent .metric-value { color: var(--gold); }
+    .metric.alert .metric-value { color: var(--coral); }
+    .signal-grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 20px; }
+    .panel { padding: 28px; border: 1px solid var(--line); background: rgba(16,36,63,.62); transition: transform .25s, background .25s; }
+    .panel-title { display: flex; align-items: baseline; justify-content: space-between; gap: 15px; margin-bottom: 25px; }
+    .panel-title h3 { margin: 0; font-family: var(--display); font-size: 24px; font-weight: 500; }
+    .panel-title span { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+    .sentiment-layout { display: grid; grid-template-columns: 165px 1fr; align-items: center; gap: 25px; }
+    .donut { width: 165px; height: 165px; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--mint) 0deg var(--pos-deg), #6e7d91 var(--pos-deg) var(--neu-deg), var(--coral) var(--neu-deg) 360deg); }
+    .donut::after { content: ''; width: 108px; height: 108px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+    .legend { display: grid; gap: 11px; }
+    .legend-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; }
+    .legend-row b { color: var(--cream); font-family: var(--mono); font-size: 12px; font-weight: 400; }
+    .legend-row i { width: 7px; height: 7px; margin-right: 8px; display: inline-block; border-radius: 50%; background: var(--mint); }
+    .legend-row i.neutral { background: #6e7d91; } .legend-row i.negative { background: var(--coral); }
+    .channel-list { display: grid; gap: 17px; }
+    .channel-label { display: flex; justify-content: space-between; margin-bottom: 6px; color: #d2dae4; font-size: 13px; }
+    .channel-label b, .channel-share { color: var(--gold); font-family: var(--mono); font-size: 11px; font-weight: 400; }
+    .channel-row { display: grid; grid-template-columns: minmax(70px, .4fr) 1fr 42px; align-items: center; column-gap: 10px; }
+    .channel-row .channel-label { grid-column: 1 / -1; }
+    .channel-track, .trend-track { height: 5px; overflow: hidden; background: rgba(255,255,255,.09); }
+    .channel-track i, .trend-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--mint), var(--gold)); transform-origin: left; animation: grow .9s cubic-bezier(.16,1,.3,1) both; }
+    .channel-share { text-align: right; color: var(--muted); }
+    .data-table { width: 100%; margin-top: 20px; border-collapse: collapse; font-size: 13px; }
+    .data-table th { color: var(--gold); font-family: var(--mono); font-size: 10px; font-weight: 400; letter-spacing: .08em; text-align: left; text-transform: uppercase; }
+    .data-table th, .data-table td { padding: 13px 12px; border-bottom: 1px solid var(--line); }
+    .data-table td { color: #c5cfdb; } .data-table td:first-child { color: var(--cream); }
+    .narrative-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; }
+    .trend-list { display: grid; gap: 18px; }
+    .trend-row { display: grid; grid-template-columns: 92px 1fr 28px; align-items: center; gap: 12px; }
+    .trend-row time, .trend-row b { color: var(--muted); font-family: var(--mono); font-size: 10px; font-weight: 400; }
+    .trend-row b { color: var(--gold); text-align: right; }
+    .keyword-cloud { display: flex; flex-wrap: wrap; gap: 9px; align-content: start; }
+    .keyword { padding: 6px 11px; border: 1px solid rgba(100,255,218,.42); color: var(--mint); font-size: 13px; transition: background .2s, color .2s; }
+    .keyword:nth-child(3n) { border-color: rgba(255,215,0,.5); color: var(--gold); }
+    .keyword:hover { color: var(--ink); background: var(--mint); }
+    .risk-list, .finding-list, .source-list { margin: 0; padding: 0; list-style: none; }
+    .risk-list { display: grid; gap: 11px; }
+    .risk-item { display: grid; grid-template-columns: 34px 1fr; gap: 13px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+    .risk-level { align-self: start; padding: 2px 5px; border: 1px solid currentColor; font-family: var(--mono); font-size: 9px; text-align: center; }
+    .risk-high .risk-level { color: var(--coral); } .risk-medium .risk-level { color: #ffb347; } .risk-low .risk-level { color: var(--mint); }
+    .risk-item strong { display: block; color: #d7dfe7; font-size: 14px; font-weight: 400; line-height: 1.55; }
+    .risk-item small { display: block; margin-top: 6px; color: var(--muted); font-family: var(--mono); font-size: 10px; }
+    .pull-quote { margin: 20px 0 0; padding: 22px 0 4px 24px; border-left: 1px solid var(--gold); color: var(--cream); font-family: var(--display); font-size: 22px; line-height: 1.35; }
+    .pull-quote::before { content: '“'; display: block; height: 17px; color: var(--gold); font-size: 44px; line-height: .7; }
+    .finding-list { display: grid; gap: 0; }
+    .finding-list li { display: grid; grid-template-columns: 40px 1fr; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+    .finding-list li > span, .source-index { color: var(--gold); font-family: var(--mono); font-size: 11px; }
+    .finding-list p { margin: 0; color: #d1dae4; font-size: 15px; }
+    .source-list { display: grid; gap: 0; }
+    .source-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 14px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+    .source-item a { display: block; color: #d6e0eb; font-size: 15px; line-height: 1.45; }
+    .source-item a:hover { color: var(--mint); }
+    .source-item small { display: block; margin-top: 5px; color: var(--muted); font-family: var(--mono); font-size: 10px; }
+    .source-item small em { color: var(--gold); font-style: normal; }
+    .source-item > span:last-child { white-space: nowrap; }
+    .meta-badge { display: inline-block; padding: 2px 6px; border: 1px solid currentColor; border-radius: 1px; font-family: var(--mono); font-size: 9px; }
+    .muted, .empty-state { color: var(--muted); }
+    .empty-state { padding: 15px 0; list-style: none; }
+    .pager { display: flex; align-items: center; justify-content: space-between; max-width: 1100px; margin: 64px auto 0; padding-top: 20px; border-top: 1px solid var(--line); }
+    .pager button { border: 0; padding: 0; color: var(--muted); background: transparent; cursor: pointer; font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; transition: color .2s; }
+    .pager button:hover:not(:disabled) { color: var(--gold); } .pager button:disabled { visibility: hidden; }
+    .pager-center { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+    .pager-center b { color: var(--gold); font-weight: 400; }
+    @keyframes page-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+    @media (max-width: 900px) {
+      .sidebar { position: sticky; top: 0; width: 100%; height: auto; padding: 14px 20px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .brand { margin-bottom: 13px; } .side-label, .side-foot { display: none; }
+      .nav-menu { display: flex; gap: 5px; margin: 0; overflow-x: auto; scrollbar-width: none; }
+      .nav-menu::-webkit-scrollbar { display: none; } .nav-menu a { min-width: max-content; padding: 4px 10px; }
+      .nav-menu a::before { display: none; } .nav-menu a:hover, .nav-menu a.active { transform: none; }
+      .main-content { width: 100%; margin-left: 0; } .page { padding: 36px 6vw 54px; }
+      .hero { min-height: auto; grid-template-columns: 1fr; gap: 5px; padding: 4vh 0 8vh; }
+      .hero-art { min-height: 250px; } .hero-art::before { width: 190px; height: 275px; } .hero-art::after { width: 270px; height: 130px; }
+      .orbit-core { width: 130px; height: 130px; } .orbit-core b { font-size: 35px; }
+      .metric-grid { grid-template-columns: repeat(2, 1fr); } .signal-grid, .narrative-grid, .overview-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .page-top { margin-bottom: 33px; } .section-intro { display: block; } .section-intro > p { margin-top: 15px; }
+      .metric-grid { gap: 8px; } .metric { min-height: 120px; padding: 15px; } .metric-value { font-size: 28px; }
+      .panel { padding: 20px; } .sentiment-layout { grid-template-columns: 1fr; justify-items: center; } .legend { width: 100%; }
+      .source-item { grid-template-columns: 25px 1fr; } .source-item > span:last-child { grid-column: 2; justify-self: start; }
+      .trend-row { grid-template-columns: 75px 1fr 20px; gap: 8px; } .pager { margin-top: 43px; }
+    }
+    '''
+
+    return f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a192f">
   <title>{_escape(topic)} · 微信舆情简报</title>
-  <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-           margin: 0; padding: 24px; background: #0a192f; color: #e6f1ff; }}
-    h1 {{ color: #ffd700; font-size: 1.6rem; margin-bottom: 4px; }}
-    h2 {{ font-size: 1.05rem; margin: 0 0 8px; }}
-    .meta {{ color: #8892b0; font-size: 0.85rem; }}
-    .badge {{ display:inline-block; border:1px solid #64ffda; color:#64ffda;
-              border-radius:4px; padding:1px 8px; font-size:0.78rem; margin-left:6px; }}
-    .card {{ background: #112240; border: 1px solid #233554; border-radius: 8px;
-             padding: 16px; margin: 16px 0; }}
-    .chip {{ display:inline-block; background:#233554; color:#64ffda; border-radius:12px;
-             padding:3px 10px; margin:3px 4px 3px 0; font-size:0.82rem; }}
-    table {{ width: 100%; border-collapse: collapse; }}
-    th, td {{ text-align: left; padding: 8px; border-bottom: 1px solid #233554; }}
-    ul {{ padding-left: 20px; margin: 6px 0; }}
-    li {{ margin: 5px 0; line-height: 1.5; }}
-    a {{ color: #64ffda; text-decoration: none; }}
-    .grid {{ display:flex; gap:16px; flex-wrap:wrap; }}
-    .grid .card {{ flex:1; min-width:240px; }}
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Source+Serif+Pro:wght@400;600&display=swap" rel="stylesheet">
+  <style>{css}</style>
 </head>
 <body>
-  <h1>{_escape(topic)}</h1>
-  <p class="meta">模板：{_escape(template_name)} · 生成时间：{_escape(generated)}
-     <span class="badge">数据源：{_escape(source_label)} · 样本 {len(posts)} 条</span></p>
+  <div class="report-shell">
+    <nav class="sidebar" aria-label="报告章节">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>BettaFish / Brief</span></div>
+      <div class="side-label">Contents / 目录</div>
+      <ul class="nav-menu">
+        <li><a href="#page-1" data-page="page-1" class="active"><span>01</span>编辑摘要</a></li>
+        <li><a href="#page-2" data-page="page-2"><span>02</span>信号分布</a></li>
+        <li><a href="#page-3" data-page="page-3"><span>03</span>叙事与风险</a></li>
+        <li><a href="#page-4" data-page="page-4"><span>04</span>要点与信源</a></li>
+      </ul>
+      <div class="side-foot"><strong>LIVE INTELLIGENCE</strong>{_escape(source_label)}<br>{_escape(generated)}<br><br>Query / Media / Insight</div>
+    </nav>
 
-  <div class="grid">
-    <div class="card">
-      <h2>🔥 热度</h2>
-      <p>指数 <strong>{_escape(heat.get('heat_score', '—'))}</strong>（{_escape(heat.get('heat_level', '—'))}），
-         提及 {_escape(heat.get('total_mentions', 0))} 条。</p>
-    </div>
-    <div class="card">
-      <h2>💬 情感</h2>
-      {sentiment_bar}
-      <p class="meta">正面 {pos}（{pos_pct}%） · 中性 {neu}（{neu_pct}%） · 负面 {neg}（{neg_pct}%）
-         · 主导：{_escape(SENTIMENT_ZH.get(sentiment.get('dominant', 'neutral'), '中性'))}</p>
-    </div>
+    <main class="main-content">
+      <section id="page-1" class="page active" aria-labelledby="page-1-title">
+        <div class="page-inner">
+          <div class="page-top"><span>BettaFish intelligence / 01</span><span class="rule"></span><span>Editorial briefing</span></div>
+          <header class="hero">
+            <div>
+              <div class="eyebrow">Weekly signal report</div>
+              <h1 id="page-1-title">关于 <em>{_escape(topic)}</em> 的<br>公众叙事切片</h1>
+              <p class="hero-deck">把分散的公开讨论，整理成一份可以快速阅读、判断和转发的舆情简报。</p>
+              <div class="hero-meta"><span>生成 <b>{_escape(generated)}</b></span><span>样本 <b>{mention_count:02d} 条</b></span><span>来源 <b>{_escape(source_label)}</b></span></div>
+            </div>
+            <div class="hero-art" aria-hidden="true"><span class="orbit-dot one"></span><span class="orbit-dot two"></span><div class="orbit-core"><div><b>{_escape(heat.get("heat_score", "—"))}</b><span>HEAT INDEX</span></div></div></div>
+          </header>
+
+          <div class="section-intro"><div><div class="eyebrow">01 / overview</div><h2 id="overview-title">先看结论</h2></div><p>一页掌握本次抓取的规模、主导情感与需要继续观察的信号。</p></div>
+          <div class="overview-grid">
+            <article class="note"><h3>编辑按语</h3><p>本期围绕「{_escape(topic)}」的公开信息共整理 <strong>{mention_count}</strong> 条。整体讨论主导情感为 <strong>{_escape(dominant)}</strong>，热度处于「{_escape(heat.get("heat_level", "—"))}」区间。建议先关注声量最大的渠道，再回到原始信源核验判断。</p></article>
+            <aside class="snapshot"><span class="snapshot-label">Dominant sentiment</span><strong>{_escape(dominant)}</strong><small>当前样本中的主导情绪</small></aside>
+          </div>
+          <div class="metric-grid">
+            <div class="metric accent"><span class="metric-label">Heat index</span><strong class="metric-value">{_escape(heat.get("heat_score", "—"))}</strong><span class="metric-note">{_escape(heat.get("heat_level", "—"))} 热度</span></div>
+            <div class="metric"><span class="metric-label">Mentions</span><strong class="metric-value">{mention_count}</strong><span class="metric-note">公开提及总量</span></div>
+            <div class="metric"><span class="metric-label">Neutral share</span><strong class="metric-value">{neu_pct}%</strong><span class="metric-note">中性讨论占比</span></div>
+            <div class="metric alert"><span class="metric-label">Watchlist</span><strong class="metric-value">{risk_count:02d}</strong><span class="metric-note">待跟进风险信号</span></div>
+          </div>
+          <div class="pager"><button type="button" data-next="page-2">下一页&nbsp;&nbsp;→</button><span class="pager-center"><b>01</b> / 04</span><button type="button" data-next="page-2">Explore signals&nbsp;&nbsp;→</button></div>
+        </div>
+      </section>
+
+      <section id="page-2" class="page" aria-labelledby="page-2-title">
+        <div class="page-inner">
+          <div class="page-top"><span>BettaFish intelligence / 02</span><span class="rule"></span><span>Distribution</span></div>
+          <div class="section-intro"><div><div class="eyebrow">02 / signal map</div><h2 id="page-2-title">情绪与声量，<br>在哪里发生</h2></div><p>分布比单一数字更重要：它揭示讨论的温度，也揭示讨论的来源。</p></div>
+          <div class="signal-grid">
+            <article class="panel"><div class="panel-title"><h3>情感光谱</h3><span>n = {total}</span></div><div class="sentiment-layout"><div class="donut" style="--pos-deg:{pos_deg}deg;--neu-deg:{neu_end_deg}deg" role="img" aria-label="正面 {pos_pct}%，中性 {neu_pct}%，负面 {neg_pct}%"></div><div class="legend"><div class="legend-row"><span><i></i>正面</span><b>{pos} / {pos_pct}%</b></div><div class="legend-row"><span><i class="neutral"></i>中性</span><b>{neu} / {neu_pct}%</b></div><div class="legend-row"><span><i class="negative"></i>负面</span><b>{neg} / {neg_pct}%</b></div><p class="muted" style="margin:8px 0 0;font-size:12px;">主导：{_escape(dominant)}</p></div></div></article>
+            <article class="panel"><div class="panel-title"><h3>渠道分布</h3><span>share of mentions</span></div><div class="channel-list">{channel_bars}</div></article>
+          </div>
+          <article class="panel" style="margin-top:20px;"><div class="panel-title"><h3>渠道明细</h3><span>engagement overview</span></div><table class="data-table"><thead><tr><th>平台 / 来源</th><th>提及</th><th>占比</th><th>平均互动</th></tr></thead><tbody>{channel_rows}</tbody></table></article>
+          <div class="pager"><button type="button" data-next="page-1">←&nbsp;&nbsp;上一页</button><span class="pager-center"><b>02</b> / 04</span><button type="button" data-next="page-3">下一页&nbsp;&nbsp;→</button></div>
+        </div>
+      </section>
+
+      <section id="page-3" class="page" aria-labelledby="page-3-title">
+        <div class="page-inner">
+          <div class="page-top"><span>BettaFish intelligence / 03</span><span class="rule"></span><span>Narrative & risk</span></div>
+          <div class="section-intro"><div><div class="eyebrow">03 / narrative</div><h2 id="page-3-title">讨论正在<br>说什么</h2></div><p>从趋势、关键词和风险命中词中，寻找值得进一步验证的叙事线索。</p></div>
+          <div class="narrative-grid">
+            <article class="panel"><div class="panel-title"><h3>声量趋势</h3><span>last 7 observations</span></div><div class="trend-list">{trend_bars}</div><blockquote class="pull-quote">趋势是线索，不是结论；回到信源，才是判断的开始。</blockquote></article>
+            <article class="panel"><div class="panel-title"><h3>热门关键词</h3><span>top signals</span></div><div class="keyword-cloud">{chips}</div><div style="height:30px"></div><div class="panel-title"><h3>风险提示</h3><span>watchlist / {risk_count:02d}</span></div><ul class="risk-list">{risk_items}</ul></article>
+          </div>
+          <div class="pager"><button type="button" data-next="page-2">←&nbsp;&nbsp;上一页</button><span class="pager-center"><b>03</b> / 04</span><button type="button" data-next="page-4">下一页&nbsp;&nbsp;→</button></div>
+        </div>
+      </section>
+
+      <section id="page-4" class="page" aria-labelledby="page-4-title">
+        <div class="page-inner">
+          <div class="page-top"><span>BettaFish intelligence / 04</span><span class="rule"></span><span>Evidence</span></div>
+          <div class="section-intro"><div><div class="eyebrow">04 / evidence desk</div><h2 id="page-4-title">要点与信源，<br>留给下一步</h2></div><p>每一条摘要都应当可以被追溯。点击标题打开原始来源，继续完成核验。</p></div>
+          <article class="panel"><div class="panel-title"><h3>编辑要点</h3><span>key findings</span></div><ol class="finding-list">{finding_items}</ol></article>
+          <article class="panel" style="margin-top:20px;"><div class="panel-title"><h3>信源列表</h3><span>click to verify</span></div><ul class="source-list">{source_items}</ul></article>
+          <footer style="display:flex;justify-content:space-between;gap:20px;margin-top:52px;color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.06em;"><span>BettaFish-skill / Query + Media + Insight</span><span>END OF BRIEF</span></footer>
+          <div class="pager"><button type="button" data-next="page-3">←&nbsp;&nbsp;上一页</button><span class="pager-center"><b>04</b> / 04</span><button type="button" data-next="page-1">Back to top&nbsp;&nbsp;↗</button></div>
+        </div>
+      </section>
+    </main>
   </div>
+  <script>
+    (() => {{
+      const pages = [...document.querySelectorAll('.page')];
+      const links = [...document.querySelectorAll('[data-page]')];
+      const order = pages.map(page => page.id);
 
-  <div class="card">
-    <h2>🏷️ 热门关键词</h2>
-    {chips}
-  </div>
+      function goToPage(pageId, updateHash = true) {{
+        const target = document.getElementById(pageId) || pages[0];
+        pages.forEach(page => page.classList.toggle('active', page === target));
+        links.forEach(link => {{
+          const selected = link.dataset.page === target.id;
+          link.classList.toggle('active', selected);
+          link.setAttribute('aria-current', selected ? 'page' : 'false');
+        }});
+        if (updateHash) history.replaceState(null, '', '#' + target.id);
+        window.scrollTo({{ top: 0, behavior: 'smooth' }});
+      }}
 
-  <div class="card">
-    <h2>📊 渠道分布</h2>
-    <table>
-      <thead><tr><th>平台/来源</th><th>条数</th><th>占比</th></tr></thead>
-      <tbody>{table_body}</tbody>
-    </table>
-  </div>
-
-  {trend_html}
-
-  <div class="card">
-    <h2>⚠️ 风险提示</h2>
-    {risk_html}
-  </div>
-
-  <div class="card">
-    <h2>📌 要点</h2>
-    <ul>{finding_items}</ul>
-  </div>
-
-  <div class="card">
-    <h2>🔗 信源列表</h2>
-    <ul style="list-style:none;padding-left:0;">{sources_html}</ul>
-  </div>
-
-  <p class="meta" style="text-align:center;margin-top:24px;">
-    由 BettaFish-skill 自动生成 · QueryAgent + MediaAgent + InsightAgent
-  </p>
+      links.forEach(link => link.addEventListener('click', event => {{
+        event.preventDefault();
+        goToPage(link.dataset.page);
+      }}));
+      document.querySelectorAll('[data-next]').forEach(button => button.addEventListener('click', () => goToPage(button.dataset.next)));
+      document.addEventListener('keydown', event => {{
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        const current = order.findIndex(id => document.getElementById(id).classList.contains('active'));
+        const next = event.key === 'ArrowRight' ? Math.min(current + 1, order.length - 1) : Math.max(current - 1, 0);
+        if (next !== current) goToPage(order[next]);
+      }});
+      const initial = location.hash.slice(1);
+      if (order.includes(initial)) goToPage(initial, false);
+      window.goToPage = goToPage;
+    }})();
+  </script>
 </body>
 </html>
-"""
-
+'''
 
 # ---------------------------------------------------------------------------
 # Push & CLI
