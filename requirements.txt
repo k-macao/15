@@ -1,0 +1,22 @@
+# BettaFish-skill 第三方 Python 依赖
+#
+# 说明: 仓库核心脚本 (scripts/*.py 中的 data_collector / graph_generator /
+# sentiment_analyzer / template_manager / report_generator) 本身仅使用 Python
+# 标准库, 测试套件 (tests/) 亦可零依赖运行。
+#
+# 以下为「实际渲染 / 子技能 (subskills)」所需的第三方库, 按需安装。
+
+# --- PDF 报告渲染 (report_generator guidance / pdf subskill) ---
+reportlab>=4.0.0
+
+# --- DOCX 子技能: 安全的 XML 解析 ---
+defusedxml>=0.7.1
+
+# --- PDF 子技能: PDF 文本抽取 / 图像处理 / PDF 转图片 ---
+pdfplumber>=0.10.0
+Pillow>=10.0.0
+pdf2image>=1.16.0
+
+# --- 参考示例中使用的数据处理库 (可选) ---
+pandas>=2.0.0
+numpy>=1.24.0

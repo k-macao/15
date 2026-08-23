@@ -1,0 +1,37 @@
+[
+  {
+    "title": "某咖啡连锁品牌口碑分析：夏季新品引发热议",
+    "snippet": "该品牌夏季新品上市以来，在微博和小红书获得大量讨论，用户普遍评价口味新颖。",
+    "url": "https://weibo.com/1234567890/AbcDef",
+    "source": "weibo",
+    "date": "2024-07-12"
+  },
+  {
+    "title": "深度测评：这家咖啡店到底值不值得去",
+    "snippet": "综合口感、环境、性价比，给出详细测评结论，整体推荐。",
+    "url": "https://www.xiaohongshu.com/explore/abc123",
+    "source": "xiaohongshu",
+    "date": "2024-07-10"
+  },
+  {
+    "title": "品牌危机？某咖啡门店服务态度遭投诉",
+    "snippet": "有消费者在抖音曝光门店服务问题，引发一定负面舆情。",
+    "url": "https://www.douyin.com/video/99887766",
+    "source": "douyin",
+    "date": "2024-07-08"
+  },
+  {
+    "title": "咖啡行业竞争格局解读",
+    "snippet": "从声量、价格、门店数多维度对比头部品牌表现。",
+    "url": "https://www.zhihu.com/question/550011222",
+    "source": "zhihu",
+    "date": "2024-07-05"
+  },
+  {
+    "title": "品牌宣传片发布（B站）",
+    "snippet": "官方发布品牌故事短片，弹幕互动热烈。",
+    "url": "https://www.bilibili.com/video/BV1xx411c7mD",
+    "source": "bilibili",
+    "date": "2024-07-03"
+  }
+]
