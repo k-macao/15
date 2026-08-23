@@ -1,0 +1,58 @@
+[
+  {
+    "id": "post_1",
+    "platform": "weibo",
+    "nickname": "咖啡爱好者小李",
+    "content": "今天新出的生椰拿铁太好喝了，强烈推荐！",
+    "sentiment": "positive",
+    "likes": 1200,
+    "comments": 320,
+    "shares": 88,
+    "timestamp": "2024-07-12T09:30:00",
+    "url": "https://weibo.com/123/1",
+    "topic": "夏季新品",
+    "engagement_score": 1608.0
+  },
+  {
+    "id": "post_2",
+    "platform": "xiaohongshu",
+    "nickname": "探店日记",
+    "content": "门店环境不错，但出杯速度有点慢，希望改进。",
+    "sentiment": "neutral",
+    "likes": 540,
+    "comments": 96,
+    "shares": 12,
+    "timestamp": "2024-07-10T15:10:00",
+    "url": "https://www.xiaohongshu.com/explore/2",
+    "topic": "门店体验",
+    "engagement_score": 648.0
+  },
+  {
+    "id": "post_3",
+    "platform": "douyin",
+    "nickname": "消费者权益站",
+    "content": "曝光这家店服务态度恶劣，等了半小时没人理。",
+    "sentiment": "negative",
+    "likes": 3200,
+    "comments": 880,
+    "shares": 410,
+    "timestamp": "2024-07-08T20:45:00",
+    "url": "https://www.douyin.com/video/3",
+    "topic": "服务投诉",
+    "engagement_score": 4490.0
+  },
+  {
+    "id": "post_4",
+    "platform": "zhihu",
+    "nickname": "行业观察者",
+    "content": "客观来说，该品牌供应链能力在行业中处于领先水平。",
+    "sentiment": "positive",
+    "likes": 760,
+    "comments": 140,
+    "shares": 60,
+    "timestamp": "2024-07-05T11:00:00",
+    "url": "https://www.zhihu.com/question/4",
+    "topic": "行业对比",
+    "engagement_score": 960.0
+  }
+]
