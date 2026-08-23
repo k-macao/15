@@ -37,6 +37,17 @@ SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 </channel></rss>
 """
 
+SAMPLE_ATOM = """<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Climate technology update</title>
+    <link href="https://example.com/atom/1" />
+    <summary>New research and policy context.</summary>
+    <updated>2025-08-20T10:30:00Z</updated>
+  </entry>
+</feed>
+"""
+
 
 class GenerateWechatPushTests(unittest.TestCase):
     """All generate()/main() tests run in offline mode for determinism."""
@@ -70,6 +81,13 @@ class GenerateWechatPushTests(unittest.TestCase):
         result = gwp.generate("测试主题", offline=True)
         self.assertEqual(result["data_source"], "offline_stub")
         self.assertIn("离线示例数据", result["html"])
+
+    def test_bilingual_rss_coverage_is_explicit(self):
+        self.assertEqual(len(gwp.ENGLISH_RSS_FEEDS), 50)
+        self.assertEqual(len(gwp.CHINESE_RSS_FEEDS), 20)
+        html_doc = gwp.generate("测试主题", offline=True)["html"]
+        self.assertIn("English RSS feeds", html_doc)
+        self.assertIn("中文 RSS feeds", html_doc)
 
     def test_cli_writes_output(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -106,6 +124,13 @@ class ParseRssTests(unittest.TestCase):
 
     def test_parse_rss_invalid_xml(self):
         self.assertEqual(gwp._parse_rss(b"not xml at all"), [])
+
+    def test_parse_atom_feed(self):
+        items = gwp._parse_rss(SAMPLE_ATOM.encode("utf-8"), default_source="atom-demo")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["url"], "https://example.com/atom/1")
+        self.assertEqual(items[0]["date"], "2025-08-20")
+        self.assertEqual(items[0]["source"], "atom-demo")
 
     def test_build_insight_falls_back_to_stub(self):
         old = gwp.fetch_search_results

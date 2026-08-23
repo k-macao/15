@@ -4,12 +4,13 @@
 
 Data pipeline
 -------------
-1. Fetch real news items about the topic from public RSS feeds
-   (Google News / Bing News, no API key required).
+1. Fetch real news items about the topic from a bilingual RSS/Atom roster
+   (50 English + 20 Chinese publisher feeds, plus Google News / Bing News,
+   no API key required).
 2. Run the library analyzers: platform stats, heat index, sentiment
    distribution, keyword extraction, and risk identification.
-3. Render a rich multi-card HTML briefing (heat / sentiment bar /
-   keywords / channels / trend / risks / findings / linked sources).
+3. Render a deep, paginated HTML briefing (coverage / sentiment / keywords /
+   channels / trend / risks / findings / linked source archive).
 
 Offline safety: when the network is unavailable, fetching fails, or
 ``--offline`` / ``WECHAT_PUSH_OFFLINE=1`` is set, the pipeline falls back
@@ -31,6 +32,7 @@ import json
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -56,7 +58,103 @@ from template_manager import select_report_template  # noqa: E402
 
 PUSHPLUS_URL = "https://www.pushplus.plus/send"
 FETCH_TIMEOUT = 12
-DEFAULT_LIMIT = 12
+DEFAULT_ENGLISH_LIMIT = 50
+DEFAULT_CHINESE_LIMIT = 20
+DEFAULT_LIMIT = DEFAULT_ENGLISH_LIMIT + DEFAULT_CHINESE_LIMIT
+RSS_FETCH_WORKERS = 12
+
+# A broad source roster keeps the briefing from reflecting a single publisher's
+# editorial bias.  Entries are real public RSS/Atom endpoints; a failed or
+# retired feed is skipped without taking down the whole report.  The language
+# quotas are deliberately explicit because the push page promises a bilingual
+# source sample (50 English + 20 Chinese items by default).
+ENGLISH_RSS_FEEDS = [
+    ("BBC News / World", "https://feeds.bbci.co.uk/news/world/rss.xml"),
+    ("BBC News / Business", "https://feeds.bbci.co.uk/news/business/rss.xml"),
+    ("BBC News / Technology", "https://feeds.bbci.co.uk/news/technology/rss.xml"),
+    ("BBC News / Science", "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"),
+    ("BBC News / Health", "https://feeds.bbci.co.uk/news/health/rss.xml"),
+    ("BBC News / UK", "https://feeds.bbci.co.uk/news/uk/rss.xml"),
+    ("NPR / News", "https://feeds.npr.org/1001/rss.xml"),
+    ("NPR / Business", "https://feeds.npr.org/1006/rss.xml"),
+    ("NPR / Technology", "https://feeds.npr.org/1019/rss.xml"),
+    ("NPR / Science", "https://feeds.npr.org/1007/rss.xml"),
+    ("NPR / Politics", "https://feeds.npr.org/1014/rss.xml"),
+    ("The Guardian / World", "https://www.theguardian.com/world/rss"),
+    ("The Guardian / Business", "https://www.theguardian.com/business/rss"),
+    ("The Guardian / Technology", "https://www.theguardian.com/technology/rss"),
+    ("The Guardian / Science", "https://www.theguardian.com/science/rss"),
+    ("The New York Times / World", "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"),
+    ("The New York Times / Business", "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"),
+    ("The New York Times / Technology", "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml"),
+    ("The New York Times / Science", "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml"),
+    ("The New York Times / U.S.", "https://rss.nytimes.com/services/xml/rss/nyt/US.xml"),
+    ("CNN / Top Stories", "http://rss.cnn.com/rss/edition.rss"),
+    ("CNN / World", "http://rss.cnn.com/rss/edition_world.rss"),
+    ("CNN / Business", "http://rss.cnn.com/rss/money_latest.rss"),
+    ("CNN / Technology", "http://rss.cnn.com/rss/edition_technology.rss"),
+    ("AP News / Top Stories", "https://feeds.apnews.com/apnews/topnews"),
+    ("AP News / Business", "https://feeds.apnews.com/apnews/business"),
+    ("Al Jazeera / All", "https://www.aljazeera.com/xml/rss/all.xml"),
+    ("The Atlantic", "https://www.theatlantic.com/feed/all/"),
+    ("DW / All", "https://rss.dw.com/rdf/rss-en-all"),
+    ("DW / Business", "https://rss.dw.com/rdf/rss-en-bus"),
+    ("DW / Science", "https://rss.dw.com/rdf/rss-en-sci"),
+    ("France 24 / English", "https://www.france24.com/en/rss"),
+    ("Euronews / News", "https://www.euronews.com/rss?level=theme&name=news"),
+    ("CNBC / Top News", "https://www.cnbc.com/id/100003114/device/rss/rss.html"),
+    ("CNBC / Technology", "https://www.cnbc.com/id/19854910/device/rss/rss.html"),
+    ("MarketWatch / Top Stories", "https://feeds.marketwatch.com/marketwatch/topstories/"),
+    ("TechCrunch", "https://techcrunch.com/feed/"),
+    ("The Verge", "https://www.theverge.com/rss/index.xml"),
+    ("Ars Technica", "https://feeds.arstechnica.com/arstechnica/index"),
+    ("WIRED", "https://www.wired.com/feed/rss"),
+    ("Engadget", "https://www.engadget.com/rss.xml"),
+    ("CNET / News", "https://www.cnet.com/rss/news/"),
+    ("MIT Technology Review", "https://www.technologyreview.com/feed/"),
+    ("Nature", "https://www.nature.com/nature.rss"),
+    ("ScienceDaily", "https://www.sciencedaily.com/rss/top/sciencedaily.xml"),
+    ("Phys.org", "https://phys.org/rss-feed/"),
+    ("NASA / Breaking News", "https://www.nasa.gov/rss/dyn/breaking_news.rss"),
+    ("Space.com", "https://www.space.com/feeds/all"),
+    ("The Conversation", "https://theconversation.com/us/articles.atom"),
+    ("Popular Mechanics", "https://www.popularmechanics.com/rss/all.xml"),
+]
+
+CHINESE_RSS_FEEDS = [
+    ("中国政府网", "https://www.gov.cn/rss/gov.xml"),
+    ("新华网", "http://www.news.cn/rss/news.xml"),
+    ("人民网 / 时政", "http://www.people.com.cn/rss/politics.xml"),
+    ("中国新闻网 / 滚动", "https://www.chinanews.com.cn/rss/scroll-news.xml"),
+    ("环球网", "https://www.huanqiu.com/rss.xml"),
+    ("央视网", "https://news.cctv.com/rss/"),
+    ("中国经济网", "http://www.ce.cn/rss/index.xml"),
+    ("澎湃新闻", "https://www.thepaper.cn/rss_news.jsp"),
+    ("36氪", "https://36kr.com/feed"),
+    ("虎嗅", "https://www.huxiu.com/rss/0.xml"),
+    ("爱范儿", "https://www.ifanr.com/feed"),
+    ("少数派", "https://sspai.com/feed"),
+    ("IT之家", "https://www.ithome.com/rss/"),
+    ("Solidot", "https://www.solidot.org/index.rss"),
+    ("联合早报", "https://www.zaobao.com.sg/rss/realtime"),
+    ("新浪新闻", "https://rss.sina.com.cn/news/marquee/ddt.xml"),
+    ("凤凰网", "https://i.ifeng.com/rss/news.xml"),
+    ("观察者网", "https://www.guancha.cn/rss"),
+    ("南方周末", "https://www.infzm.com/rss"),
+    ("财联社", "https://www.cls.cn/rss"),
+]
+
+# Query feeds are retained as high-relevance candidates and the publisher
+# roster fills the bilingual quota with broader context when the search feed
+# does not return enough items.
+QUERY_FEEDS = (
+    ("Google News / English query", "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en", "en"),
+    ("Google News / 中文检索", "https://news.google.com/rss/search?q={query}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans", "zh"),
+    ("Bing News / English query", "https://www.bing.com/news/search?q={query}&format=rss&setlang=en-US", "en"),
+    ("Bing News / 中文检索", "https://www.bing.com/news/search?q={query}&format=rss&setlang=zh-CN", "zh"),
+)
+
+LAST_FETCH_STATS: Dict[str, Any] = {}
 
 SENTIMENT_ZH = {"positive": "正面", "negative": "负面", "neutral": "中性"}
 RISK_ZH = {"high": "高", "medium": "中", "low": "低"}
@@ -90,35 +188,70 @@ def _http_get(url: str, timeout: int = FETCH_TIMEOUT) -> bytes:
         return resp.read()
 
 
-def _parse_rss(xml_bytes: bytes, default_source: str = "news") -> List[Dict[str, str]]:
-    """Parse an RSS 2.0 feed into search-result-shaped dicts."""
-    results: List[Dict[str, str]] = []
+def _local_name(tag: Any) -> str:
+    """Return an XML tag name without a namespace prefix."""
+    return str(tag).rsplit("}", 1)[-1].lower()
+
+
+def _child_text(element: ET.Element, *names: str) -> str:
+    wanted = {name.lower() for name in names}
+    for child in list(element):
+        if _local_name(child.tag) in wanted:
+            return "".join(child.itertext()).strip()
+    return ""
+
+
+def _child_link(element: ET.Element) -> str:
+    for child in list(element):
+        if _local_name(child.tag) != "link":
+            continue
+        href = (child.attrib.get("href") or "").strip()
+        if href:
+            return href
+        text = "".join(child.itertext()).strip()
+        if text:
+            return text
+    return ""
+
+
+def _normalise_feed_date(value: str) -> str:
+    value = (value or "").strip()
+    if not value:
+        return ""
+    try:
+        return parsedate_to_datetime(value).strftime("%Y-%m-%d")
+    except (TypeError, ValueError, OverflowError):
+        pass
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+    except (TypeError, ValueError, OverflowError):
+        return ""
+
+
+def _parse_feed_document(xml_bytes: bytes, default_source: str = "news") -> List[Dict[str, str]]:
+    """Parse RSS 2.0 and Atom documents into search-result-shaped dicts."""
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError:
-        return results
+        return []
 
-    for item in root.findall(".//item"):
-        title = _strip_tags(item.findtext("title") or "")
-        link = (item.findtext("link") or "").strip()
-        snippet = _strip_tags(item.findtext("description") or "")
-        source = _strip_tags(item.findtext("source") or "") or default_source
-        date = ""
-        pub = item.findtext("pubDate") or ""
-        if pub:
-            try:
-                date = parsedate_to_datetime(pub).strftime("%Y-%m-%d")
-            except (TypeError, ValueError):
-                date = ""
+    item_tag = "entry" if _local_name(root.tag) == "feed" else "item"
+    results: List[Dict[str, str]] = []
+    for item in (node for node in root.iter() if _local_name(node.tag) == item_tag):
+        title = _strip_tags(_child_text(item, "title"))
+        link = _child_link(item)
+        snippet = _strip_tags(_child_text(item, "description", "summary", "content"))
+        source = _strip_tags(_child_text(item, "source", "author")) or default_source
+        date = _normalise_feed_date(_child_text(item, "pubDate", "published", "updated"))
         if not title or not link:
             continue
-        # Google News duplicates the title inside description; drop the echo.
+        # Google News often duplicates the title inside description.
         if snippet == title or not snippet:
             snippet = title
         results.append(
             {
                 "title": title,
-                "snippet": snippet[:300],
+                "snippet": snippet[:500],
                 "url": link,
                 "source": source,
                 "date": date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
@@ -127,38 +260,110 @@ def _parse_rss(xml_bytes: bytes, default_source: str = "news") -> List[Dict[str,
     return results
 
 
+def _parse_rss(xml_bytes: bytes, default_source: str = "news") -> List[Dict[str, str]]:
+    """Backward-compatible RSS parser, now also accepting Atom feeds."""
+    return _parse_feed_document(xml_bytes, default_source=default_source)
+
+
+def _feed_result(
+    feed_name: str,
+    feed_url: str,
+    language: str,
+    xml_bytes: bytes,
+) -> Dict[str, Any]:
+    items = _parse_feed_document(xml_bytes, default_source=feed_name)
+    for item in items:
+        item.update({"feed_name": feed_name, "feed_url": feed_url, "language": language})
+    return {"name": feed_name, "url": feed_url, "language": language, "items": items, "error": ""}
+
+
+def _fetch_one_feed(feed_name: str, feed_url: str, language: str) -> Dict[str, Any]:
+    try:
+        return _feed_result(feed_name, feed_url, language, _http_get(feed_url))
+    except (urllib.error.URLError, OSError, ValueError, ET.ParseError) as exc:
+        return {"name": feed_name, "url": feed_url, "language": language, "items": [], "error": str(exc)}
+
+
+def _topic_relevance(item: Dict[str, str], topic: str) -> int:
+    """Rank search-feed items before broad publisher-feed context."""
+    haystack = f'{item.get("title", "")} {item.get("snippet", "")}'.lower()
+    terms = re.findall(r"[a-z0-9]{3,}|[\u4e00-\u9fff]{2,}", topic.lower())
+    return sum(1 for term in set(terms) if term in haystack)
+
+
+def _language_targets(limit: int) -> Dict[str, int]:
+    requested = max(int(limit or 0), 0)
+    if requested == 0:
+        return {"en": 0, "zh": 0}
+    english = min(DEFAULT_ENGLISH_LIMIT, round(requested * DEFAULT_ENGLISH_LIMIT / DEFAULT_LIMIT))
+    english = max(0, english)
+    chinese = min(DEFAULT_CHINESE_LIMIT, requested - english)
+    if english + chinese < requested:
+        english = min(DEFAULT_ENGLISH_LIMIT, english + requested - english - chinese)
+    return {"en": english, "zh": chinese}
+
+
 def fetch_search_results(topic: str, limit: int = DEFAULT_LIMIT) -> List[Dict[str, str]]:
-    """Fetch real news/search items about the topic from public RSS feeds.
+    """Fetch a bilingual RSS/Atom sample, defaulting to 50 English + 20 Chinese.
 
-    Tries Google News first, then Bing News; merges and dedupes by title.
-    Returns an empty list when everything fails (caller falls back to stubs).
+    Four query feeds provide high-relevance results.  The 50 English and 20
+    Chinese publisher feeds then add source diversity and background context.
+    All feeds are fetched concurrently; one unavailable publisher never blocks
+    the remaining sources.  The returned list remains compatible with the
+    original search-result contract.
     """
-    q = urllib.parse.quote(topic)
-    feeds = [
-        (
-            "google_news",
-            f"https://news.google.com/rss/search?q={q}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
-        ),
-        ("bing_news", f"https://www.bing.com/news/search?q={q}&format=rss"),
+    global LAST_FETCH_STATS
+    targets = _language_targets(limit)
+    query = urllib.parse.quote(topic)
+    feed_jobs = [
+        (name, template.format(query=query), language)
+        for name, template, language in QUERY_FEEDS
     ]
+    feed_jobs.extend((name, url, "en") for name, url in ENGLISH_RSS_FEEDS)
+    feed_jobs.extend((name, url, "zh") for name, url in CHINESE_RSS_FEEDS)
 
-    merged: List[Dict[str, str]] = []
-    seen_titles = set()
-    for name, url in feeds:
-        try:
-            items = _parse_rss(_http_get(url), default_source=name)
-        except (urllib.error.URLError, OSError, ValueError) as exc:
-            print(f"[fetch] {name} failed: {exc}", file=sys.stderr)
-            continue
-        for it in items:
-            key = it["title"][:60]
-            if key in seen_titles:
+    completed: List[Dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=RSS_FETCH_WORKERS) as executor:
+        futures = [executor.submit(_fetch_one_feed, *job) for job in feed_jobs]
+        for future in as_completed(futures):
+            completed.append(future.result())
+
+    query_names = {name for name, _template, _language in QUERY_FEEDS}
+    LAST_FETCH_STATS = {
+        "configured_english_feeds": len(ENGLISH_RSS_FEEDS),
+        "configured_chinese_feeds": len(CHINESE_RSS_FEEDS),
+        "configured_total_feeds": len(ENGLISH_RSS_FEEDS) + len(CHINESE_RSS_FEEDS),
+        "successful_english_feeds": sum(1 for feed in completed if feed["language"] == "en" and feed["name"] not in query_names and not feed["error"]),
+        "successful_chinese_feeds": sum(1 for feed in completed if feed["language"] == "zh" and feed["name"] not in query_names and not feed["error"]),
+        "english_items": 0,
+        "chinese_items": 0,
+        "requested_english_items": targets["en"],
+        "requested_chinese_items": targets["zh"],
+    }
+
+    # Query feeds are more relevant than broad publisher feeds.  Preserve that
+    # priority while using relevance and source order to make output stable.
+    candidates: Dict[str, List[Dict[str, str]]] = {"en": [], "zh": []}
+    seen_titles: set[str] = set()
+    for feed in sorted(completed, key=lambda value: value["name"] not in query_names):
+        for item in feed["items"]:
+            key = re.sub(r"\W+", "", item["title"].lower())[:100]
+            if not key or key in seen_titles:
                 continue
             seen_titles.add(key)
-            merged.append(it)
-        if len(merged) >= limit:
-            break
-    return merged[:limit]
+            item["relevance"] = _topic_relevance(item, topic)
+            candidates[feed["language"]].append(item)
+
+    selected: List[Dict[str, str]] = []
+    for language in ("en", "zh"):
+        language_items = sorted(
+            candidates[language],
+            key=lambda item: (-int(item.get("relevance", 0)), item.get("date", "")),
+        )
+        chosen = language_items[:targets[language]]
+        LAST_FETCH_STATS[f"{language}_items"] = len(chosen)
+        selected.extend(chosen)
+    return selected
 
 
 def _sample_search_results(topic: str) -> List[Dict[str, str]]:
@@ -211,6 +416,9 @@ def _posts_from_results(results: List[Dict]) -> List[Dict]:
                 "id": f"p{i}",
                 "platform": platform,
                 "nickname": item.get("source") or "source",
+                "feed_name": item.get("feed_name") or item.get("source") or "source",
+                "feed_url": item.get("feed_url") or "",
+                "language": item.get("language") or "unknown",
                 "content": item.get("snippet") or item.get("title") or "",
                 "title": item.get("title") or "",
                 "sentiment": sent.label,
@@ -241,8 +449,25 @@ def build_insight(topic: str, offline: bool = False, limit: int = DEFAULT_LIMIT)
         raw = _sample_search_results(topic)
         data_source = "offline_stub"
 
-    parsed = [collector.parse_search_result(r) for r in raw]
+    parsed = []
+    for result in raw:
+        parsed_result = collector.parse_search_result(result)
+        for field in ("feed_name", "feed_url", "language", "relevance"):
+            if field in result:
+                parsed_result[field] = result[field]
+        parsed.append(parsed_result)
     posts = _posts_from_results(parsed)
+    coverage = dict(LAST_FETCH_STATS) if data_source == "rss_news" else {
+        "configured_english_feeds": len(ENGLISH_RSS_FEEDS),
+        "configured_chinese_feeds": len(CHINESE_RSS_FEEDS),
+        "configured_total_feeds": len(ENGLISH_RSS_FEEDS) + len(CHINESE_RSS_FEEDS),
+        "successful_english_feeds": 0,
+        "successful_chinese_feeds": 0,
+        "english_items": sum(1 for item in raw if item.get("language") == "en"),
+        "chinese_items": sum(1 for item in raw if item.get("language") == "zh"),
+        "requested_english_items": min(DEFAULT_ENGLISH_LIMIT, limit),
+        "requested_chinese_items": min(DEFAULT_CHINESE_LIMIT, limit),
+    }
     platform_stats = collector.aggregate_platform_stats(posts)
     texts = [p["content"] for p in posts]
     heat = collector.calculate_heat_index(texts)
@@ -288,6 +513,7 @@ def build_insight(topic: str, offline: bool = False, limit: int = DEFAULT_LIMIT)
         "risks": risks,
         "trend_data": trend_data,
         "data_source": data_source,
+        "rss_coverage": coverage,
     }
 
 
@@ -321,6 +547,19 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     generated = data.get("analysis_time") or datetime.now().strftime("%Y-%m-%d %H:%M")
     data_source = data.get("data_source") or "unknown"
     source_label = "实时 RSS 抓取" if data_source == "rss_news" else "离线示例数据"
+    coverage = data.get("rss_coverage") or {}
+    configured_english = int(coverage.get("configured_english_feeds", len(ENGLISH_RSS_FEEDS)) or 0)
+    configured_chinese = int(coverage.get("configured_chinese_feeds", len(CHINESE_RSS_FEEDS)) or 0)
+    successful_english = int(coverage.get("successful_english_feeds", 0) or 0)
+    successful_chinese = int(coverage.get("successful_chinese_feeds", 0) or 0)
+    english_items = int(coverage.get("english_items", 0) or 0)
+    chinese_items = int(coverage.get("chinese_items", 0) or 0)
+    configured_total = configured_english + configured_chinese
+    successful_total = successful_english + successful_chinese
+    coverage_note = (
+        f"本轮配置 {configured_english} 个英文与 {configured_chinese} 个中文 RSS/Atom 源，"
+        f"成功连通 {successful_total} 个，最终纳入 {english_items} 条英文、{chinese_items} 条中文内容。"
+    )
 
     # --- shared values ---
     pos = int(sentiment.get("positive", 0) or 0)
@@ -394,15 +633,24 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     ) or '<li class="empty-state">暂无要点</li>'
 
     # --- linked sources ---
-    source_items = "".join(
-        f'''<li class="source-item">
-          <span class="source-index">{index:02d}</span>
-          <div><a href="{_escape(post.get("url") or "#")}" target="_blank" rel="noopener">{_escape((post.get("title") or post.get("content") or "")[:90])}</a>
-          <small>{_escape(post.get("nickname", ""))} <em>·</em> {_escape(post.get("timestamp", ""))}</small></div>
-          {_sentiment_badge(post.get("sentiment", "neutral"))}
-        </li>'''
-        for index, post in enumerate(posts[:10], 1)
-    ) or '<li class="empty-state">暂无信源</li>'
+    def render_source_items(source_posts: List[Dict], start_index: int = 1) -> str:
+        return "".join(
+            f'''<li class="source-item">
+              <span class="source-index">{index:02d}</span>
+              <div><a href="{_escape(post.get("url") or "#")}" target="_blank" rel="noopener">{_escape((post.get("title") or post.get("content") or "")[:110])}</a>
+              <small>{_escape("EN" if post.get("language") == "en" else "中文" if post.get("language") == "zh" else "来源")} <em>·</em> {_escape(post.get("feed_name") or post.get("nickname", ""))} <em>·</em> {_escape(post.get("timestamp", ""))}</small></div>
+              {_sentiment_badge(post.get("sentiment", "neutral"))}
+            </li>'''
+            for index, post in enumerate(source_posts, start_index)
+        )
+
+    source_items = render_source_items(posts[:12]) or '<li class="empty-state">暂无信源</li>'
+    archive_items = render_source_items(posts[12:70], 13)
+    source_archive = (
+        f'<details class="source-archive"><summary>展开其余 {len(posts[12:70])} 条信源</summary><ul class="source-list">{archive_items}</ul></details>'
+        if archive_items
+        else ""
+    )
 
     css = r'''
     :root {
@@ -490,6 +738,11 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     .snapshot-label { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
     .snapshot strong { display: block; margin: 14px 0 3px; color: var(--mint); font-family: var(--display); font-size: 38px; font-weight: 500; }
     .snapshot small { color: var(--muted); }
+    .coverage-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 20px; border: 1px solid var(--line); background: var(--line); }
+    .coverage-item { padding: 16px 18px; background: rgba(16,36,63,.72); }
+    .coverage-item strong { display: block; color: var(--gold); font-family: var(--display); font-size: 25px; font-weight: 500; line-height: 1; }
+    .coverage-item span { display: block; margin-top: 7px; color: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+    .coverage-note { margin: 15px 0 0; color: var(--muted); font-size: 13px; }
     .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 48px; }
     .metric { min-height: 140px; padding: 20px; border-top: 1px solid var(--line-strong); background: rgba(16,36,63,.62); transition: transform .25s, background .25s; }
     .metric:hover, .panel:hover { transform: translateY(-4px); background: rgba(23,46,78,.8); }
@@ -546,6 +799,11 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     .finding-list li > span, .source-index { color: var(--gold); font-family: var(--mono); font-size: 11px; }
     .finding-list p { margin: 0; color: #d1dae4; font-size: 15px; }
     .source-list { display: grid; gap: 0; }
+    .source-archive { margin-top: 22px; border-top: 1px solid var(--line); }
+    .source-archive summary { padding: 17px 0 5px; color: var(--mint); cursor: pointer; font-family: var(--mono); font-size: 10px; letter-spacing: .08em; list-style: none; }
+    .source-archive summary::-webkit-details-marker { display: none; }
+    .source-archive summary::before { content: '+ '; color: var(--gold); }
+    .source-archive[open] summary::before { content: '− '; }
     .source-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 14px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
     .source-item a { display: block; color: #d6e0eb; font-size: 15px; line-height: 1.45; }
     .source-item a:hover { color: var(--mint); }
@@ -573,7 +831,7 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
       .hero { min-height: auto; grid-template-columns: 1fr; gap: 5px; padding: 4vh 0 8vh; }
       .hero-art { min-height: 250px; } .hero-art::before { width: 190px; height: 275px; } .hero-art::after { width: 270px; height: 130px; }
       .orbit-core { width: 130px; height: 130px; } .orbit-core b { font-size: 35px; }
-      .metric-grid { grid-template-columns: repeat(2, 1fr); } .signal-grid, .narrative-grid, .overview-grid { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: repeat(2, 1fr); } .coverage-strip { grid-template-columns: repeat(2, 1fr); } .signal-grid, .narrative-grid, .overview-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 560px) {
       .page-top { margin-bottom: 33px; } .section-intro { display: block; } .section-intro > p { margin-top: 15px; }
@@ -629,6 +887,13 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
             <article class="note"><h3>编辑按语</h3><p>本期围绕「{_escape(topic)}」的公开信息共整理 <strong>{mention_count}</strong> 条。整体讨论主导情感为 <strong>{_escape(dominant)}</strong>，热度处于「{_escape(heat.get("heat_level", "—"))}」区间。建议先关注声量最大的渠道，再回到原始信源核验判断。</p></article>
             <aside class="snapshot"><span class="snapshot-label">Dominant sentiment</span><strong>{_escape(dominant)}</strong><small>当前样本中的主导情绪</small></aside>
           </div>
+          <div class="coverage-strip" aria-label="RSS 来源覆盖范围">
+            <div class="coverage-item"><strong>{configured_english}</strong><span>English RSS feeds</span></div>
+            <div class="coverage-item"><strong>{configured_chinese}</strong><span>中文 RSS feeds</span></div>
+            <div class="coverage-item"><strong>{successful_total}</strong><span>feeds connected</span></div>
+            <div class="coverage-item"><strong>{configured_total}</strong><span>feeds configured</span></div>
+          </div>
+          <p class="coverage-note">{_escape(coverage_note)}</p>
           <div class="metric-grid">
             <div class="metric accent"><span class="metric-label">Heat index</span><strong class="metric-value">{_escape(heat.get("heat_score", "—"))}</strong><span class="metric-note">{_escape(heat.get("heat_level", "—"))} 热度</span></div>
             <div class="metric"><span class="metric-label">Mentions</span><strong class="metric-value">{mention_count}</strong><span class="metric-note">公开提及总量</span></div>
@@ -669,7 +934,7 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
           <div class="page-top"><span>BettaFish intelligence / 04</span><span class="rule"></span><span>Evidence</span></div>
           <div class="section-intro"><div><div class="eyebrow">04 / evidence desk</div><h2 id="page-4-title">要点与信源，<br>留给下一步</h2></div><p>每一条摘要都应当可以被追溯。点击标题打开原始来源，继续完成核验。</p></div>
           <article class="panel"><div class="panel-title"><h3>编辑要点</h3><span>key findings</span></div><ol class="finding-list">{finding_items}</ol></article>
-          <article class="panel" style="margin-top:20px;"><div class="panel-title"><h3>信源列表</h3><span>click to verify</span></div><ul class="source-list">{source_items}</ul></article>
+          <article class="panel" style="margin-top:20px;"><div class="panel-title"><h3>信源列表</h3><span>click to verify / {mention_count} items</span></div><ul class="source-list">{source_items}</ul>{source_archive}</article>
           <footer style="display:flex;justify-content:space-between;gap:20px;margin-top:52px;color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.06em;"><span>BettaFish-skill / Query + Media + Insight</span><span>END OF BRIEF</span></footer>
           <div class="pager"><button type="button" data-next="page-3">←&nbsp;&nbsp;上一页</button><span class="pager-center"><b>04</b> / 04</span><button type="button" data-next="page-1">Back to top&nbsp;&nbsp;↗</button></div>
         </div>
@@ -771,6 +1036,7 @@ def generate(topic: str, offline: Optional[bool] = None, limit: int = DEFAULT_LI
     report["risks"] = insight["risks"]
     report["trend_data"] = insight["trend_data"]
     report["data_source"] = insight["data_source"]
+    report["rss_coverage"] = insight["rss_coverage"]
     html_doc = render_html(topic, report, template_name)
     return {
         "html": html_doc,
@@ -784,7 +1050,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate WeChat push HTML via library tools.")
     parser.add_argument("--topic", default=os.environ.get("TOPIC", "AI 行业本周舆情"))
     parser.add_argument("--output", default="dist/wechat_push.html")
-    parser.add_argument("--limit", type=int, default=DEFAULT_LIMIT, help="Max fetched items.")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_LIMIT,
+        help="Max fetched items (default: 70 = 50 English + 20 Chinese).",
+    )
     parser.add_argument(
         "--offline",
         action="store_true",

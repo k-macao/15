@@ -94,6 +94,11 @@
     .snapshot-label { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .13em; text-transform: uppercase; }
     .snapshot strong { display: block; margin: 14px 0 3px; color: var(--mint); font-family: var(--display); font-size: 38px; font-weight: 500; }
     .snapshot small { color: var(--muted); }
+    .coverage-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 20px; border: 1px solid var(--line); background: var(--line); }
+    .coverage-item { padding: 16px 18px; background: rgba(16,36,63,.72); }
+    .coverage-item strong { display: block; color: var(--gold); font-family: var(--display); font-size: 25px; font-weight: 500; line-height: 1; }
+    .coverage-item span { display: block; margin-top: 7px; color: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }
+    .coverage-note { margin: 15px 0 0; color: var(--muted); font-size: 13px; }
     .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 48px; }
     .metric { min-height: 140px; padding: 20px; border-top: 1px solid var(--line-strong); background: rgba(16,36,63,.62); transition: transform .25s, background .25s; }
     .metric:hover, .panel:hover { transform: translateY(-4px); background: rgba(23,46,78,.8); }
@@ -150,6 +155,11 @@
     .finding-list li > span, .source-index { color: var(--gold); font-family: var(--mono); font-size: 11px; }
     .finding-list p { margin: 0; color: #d1dae4; font-size: 15px; }
     .source-list { display: grid; gap: 0; }
+    .source-archive { margin-top: 22px; border-top: 1px solid var(--line); }
+    .source-archive summary { padding: 17px 0 5px; color: var(--mint); cursor: pointer; font-family: var(--mono); font-size: 10px; letter-spacing: .08em; list-style: none; }
+    .source-archive summary::-webkit-details-marker { display: none; }
+    .source-archive summary::before { content: '+ '; color: var(--gold); }
+    .source-archive[open] summary::before { content: '− '; }
     .source-item { display: grid; grid-template-columns: 34px 1fr auto; gap: 14px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
     .source-item a { display: block; color: #d6e0eb; font-size: 15px; line-height: 1.45; }
     .source-item a:hover { color: var(--mint); }
@@ -177,7 +187,7 @@
       .hero { min-height: auto; grid-template-columns: 1fr; gap: 5px; padding: 4vh 0 8vh; }
       .hero-art { min-height: 250px; } .hero-art::before { width: 190px; height: 275px; } .hero-art::after { width: 270px; height: 130px; }
       .orbit-core { width: 130px; height: 130px; } .orbit-core b { font-size: 35px; }
-      .metric-grid { grid-template-columns: repeat(2, 1fr); } .signal-grid, .narrative-grid, .overview-grid { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: repeat(2, 1fr); } .coverage-strip { grid-template-columns: repeat(2, 1fr); } .signal-grid, .narrative-grid, .overview-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 560px) {
       .page-top { margin-bottom: 33px; } .section-intro { display: block; } .section-intro > p { margin-top: 15px; }
@@ -199,7 +209,7 @@
         <li><a href="#page-3" data-page="page-3"><span>03</span>叙事与风险</a></li>
         <li><a href="#page-4" data-page="page-4"><span>04</span>要点与信源</a></li>
       </ul>
-      <div class="side-foot"><strong>LIVE INTELLIGENCE</strong>离线示例数据<br>2026-08-23 19:15<br><br>Query / Media / Insight</div>
+      <div class="side-foot"><strong>LIVE INTELLIGENCE</strong>离线示例数据<br>2026-08-23 19:20<br><br>Query / Media / Insight</div>
     </nav>
 
     <main class="main-content">
@@ -211,7 +221,7 @@
               <div class="eyebrow">Weekly signal report</div>
               <h1 id="page-1-title">关于 <em>新能源汽车</em> 的<br>公众叙事切片</h1>
               <p class="hero-deck">把分散的公开讨论，整理成一份可以快速阅读、判断和转发的舆情简报。</p>
-              <div class="hero-meta"><span>生成 <b>2026-08-23 19:15</b></span><span>样本 <b>03 条</b></span><span>来源 <b>离线示例数据</b></span></div>
+              <div class="hero-meta"><span>生成 <b>2026-08-23 19:20</b></span><span>样本 <b>03 条</b></span><span>来源 <b>离线示例数据</b></span></div>
             </div>
             <div class="hero-art" aria-hidden="true"><span class="orbit-dot one"></span><span class="orbit-dot two"></span><div class="orbit-core"><div><b>2.28</b><span>HEAT INDEX</span></div></div></div>
           </header>
@@ -221,6 +231,13 @@
             <article class="note"><h3>编辑按语</h3><p>本期围绕「新能源汽车」的公开信息共整理 <strong>3</strong> 条。整体讨论主导情感为 <strong>中性</strong>，热度处于「极低」区间。建议先关注声量最大的渠道，再回到原始信源核验判断。</p></article>
             <aside class="snapshot"><span class="snapshot-label">Dominant sentiment</span><strong>中性</strong><small>当前样本中的主导情绪</small></aside>
           </div>
+          <div class="coverage-strip" aria-label="RSS 来源覆盖范围">
+            <div class="coverage-item"><strong>50</strong><span>English RSS feeds</span></div>
+            <div class="coverage-item"><strong>20</strong><span>中文 RSS feeds</span></div>
+            <div class="coverage-item"><strong>0</strong><span>feeds connected</span></div>
+            <div class="coverage-item"><strong>70</strong><span>feeds configured</span></div>
+          </div>
+          <p class="coverage-note">本轮配置 50 个英文与 20 个中文 RSS/Atom 源，成功连通 0 个，最终纳入 0 条英文、0 条中文内容。</p>
           <div class="metric-grid">
             <div class="metric accent"><span class="metric-label">Heat index</span><strong class="metric-value">2.28</strong><span class="metric-note">极低 热度</span></div>
             <div class="metric"><span class="metric-label">Mentions</span><strong class="metric-value">3</strong><span class="metric-note">公开提及总量</span></div>
@@ -295,22 +312,22 @@
           <div class="page-top"><span>BettaFish intelligence / 04</span><span class="rule"></span><span>Evidence</span></div>
           <div class="section-intro"><div><div class="eyebrow">04 / evidence desk</div><h2 id="page-4-title">要点与信源，<br>留给下一步</h2></div><p>每一条摘要都应当可以被追溯。点击标题打开原始来源，继续完成核验。</p></div>
           <article class="panel"><div class="panel-title"><h3>编辑要点</h3><span>key findings</span></div><ol class="finding-list"><li><span>01</span><p>新能源汽车：行业观察与舆情摘要</p></li><li><span>02</span><p>新能源汽车 社区热议</p></li><li><span>03</span><p>新能源汽车 短视频传播</p></li></ol></article>
-          <article class="panel" style="margin-top:20px;"><div class="panel-title"><h3>信源列表</h3><span>click to verify</span></div><ul class="source-list"><li class="source-item">
-          <span class="source-index">01</span>
-          <div><a href="https://weibo.com/example/topic" target="_blank" rel="noopener">新能源汽车：行业观察与舆情摘要</a>
-          <small>weibo <em>·</em> 2026-08-23</small></div>
-          <span class="meta-badge" style="color:#8892b0;">中性</span>
-        </li><li class="source-item">
-          <span class="source-index">02</span>
-          <div><a href="https://www.zhihu.com/question/example" target="_blank" rel="noopener">新能源汽车 社区热议</a>
-          <small>zhihu <em>·</em> 2026-08-23</small></div>
-          <span class="meta-badge" style="color:#8892b0;">中性</span>
-        </li><li class="source-item">
-          <span class="source-index">03</span>
-          <div><a href="https://www.douyin.com/video/example" target="_blank" rel="noopener">新能源汽车 短视频传播</a>
-          <small>douyin <em>·</em> 2026-08-23</small></div>
-          <span class="meta-badge" style="color:#8892b0;">中性</span>
-        </li></ul></article>
+          <article class="panel" style="margin-top:20px;"><div class="panel-title"><h3>信源列表</h3><span>click to verify / 3 items</span></div><ul class="source-list"><li class="source-item">
+              <span class="source-index">01</span>
+              <div><a href="https://weibo.com/example/topic" target="_blank" rel="noopener">新能源汽车：行业观察与舆情摘要</a>
+              <small>来源 <em>·</em> weibo <em>·</em> 2026-08-23</small></div>
+              <span class="meta-badge" style="color:#8892b0;">中性</span>
+            </li><li class="source-item">
+              <span class="source-index">02</span>
+              <div><a href="https://www.zhihu.com/question/example" target="_blank" rel="noopener">新能源汽车 社区热议</a>
+              <small>来源 <em>·</em> zhihu <em>·</em> 2026-08-23</small></div>
+              <span class="meta-badge" style="color:#8892b0;">中性</span>
+            </li><li class="source-item">
+              <span class="source-index">03</span>
+              <div><a href="https://www.douyin.com/video/example" target="_blank" rel="noopener">新能源汽车 短视频传播</a>
+              <small>来源 <em>·</em> douyin <em>·</em> 2026-08-23</small></div>
+              <span class="meta-badge" style="color:#8892b0;">中性</span>
+            </li></ul></article>
           <footer style="display:flex;justify-content:space-between;gap:20px;margin-top:52px;color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.06em;"><span>BettaFish-skill / Query + Media + Insight</span><span>END OF BRIEF</span></footer>
           <div class="pager"><button type="button" data-next="page-3">←&nbsp;&nbsp;上一页</button><span class="pager-center"><b>04</b> / 04</span><button type="button" data-next="page-1">Back to top&nbsp;&nbsp;↗</button></div>
         </div>
