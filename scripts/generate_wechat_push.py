@@ -718,7 +718,7 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     .hero-deck { max-width: 550px; color: #bdc8d5; font-size: 19px; line-height: 1.7; }
     .hero-meta { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 38px; color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .06em; }
     .hero-meta b { color: var(--mint); font-weight: 400; }
-    .hero-art { position: relative; min-height: 385px; display: grid; place-items: center; }
+    .hero-art { position: relative; min-height: 385px; display: grid; place-items: center; overflow: hidden; }
     .hero-art::before, .hero-art::after { content: ''; position: absolute; border: 1px solid rgba(255,215,0,.45); border-radius: 50%; transform: rotate(-25deg); }
     .hero-art::before { width: 275px; height: 410px; }
     .hero-art::after { width: 370px; height: 190px; border-color: rgba(100,255,218,.28); transform: rotate(31deg); }
@@ -769,6 +769,8 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     .channel-label b, .channel-share { color: var(--gold); font-family: var(--mono); font-size: 11px; font-weight: 400; }
     .channel-row { display: grid; grid-template-columns: minmax(70px, .4fr) 1fr 42px; align-items: center; column-gap: 10px; }
     .channel-row .channel-label { grid-column: 1 / -1; }
+    .channel-row .channel-track { grid-column: 1 / 3; }
+    .channel-row .channel-share { grid-column: 3; }
     .channel-track, .trend-track { height: 5px; overflow: hidden; background: rgba(255,255,255,.09); }
     .channel-track i, .trend-track i { display: block; height: 100%; background: linear-gradient(90deg, var(--mint), var(--gold)); transform-origin: left; animation: grow .9s cubic-bezier(.16,1,.3,1) both; }
     .channel-share { text-align: right; color: var(--muted); }
@@ -777,7 +779,11 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     .data-table th, .data-table td { padding: 13px 12px; border-bottom: 1px solid var(--line); }
     .data-table td { color: #c5cfdb; } .data-table td:first-child { color: var(--cream); }
     .narrative-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; }
-    .trend-list { display: grid; gap: 18px; }
+    .trend-list { display: grid; gap: 18px; align-content: start; }
+    .trend-panel { display: flex; flex-direction: column; }
+    .trend-panel .trend-list { flex: 1 1 auto; }
+    .trend-panel .pull-quote { margin-top: auto; }
+    .narrative-stack { display: grid; gap: 20px; align-content: start; }
     .trend-row { display: grid; grid-template-columns: 92px 1fr 28px; align-items: center; gap: 12px; }
     .trend-row time, .trend-row b { color: var(--muted); font-family: var(--mono); font-size: 10px; font-weight: 400; }
     .trend-row b { color: var(--gold); text-align: right; }
@@ -822,6 +828,7 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
     @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
     @media (max-width: 900px) {
+      .report-shell { flex-direction: column; }
       .sidebar { position: sticky; top: 0; width: 100%; height: auto; padding: 14px 20px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
       .brand { margin-bottom: 13px; } .side-label, .side-foot { display: none; }
       .nav-menu { display: flex; gap: 5px; margin: 0; overflow-x: auto; scrollbar-width: none; }
@@ -922,8 +929,11 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
           <div class="page-top"><span>BettaFish intelligence / 03</span><span class="rule"></span><span>Narrative & risk</span></div>
           <div class="section-intro"><div><div class="eyebrow">03 / narrative</div><h2 id="page-3-title">讨论正在<br>说什么</h2></div><p>从趋势、关键词和风险命中词中，寻找值得进一步验证的叙事线索。</p></div>
           <div class="narrative-grid">
-            <article class="panel"><div class="panel-title"><h3>声量趋势</h3><span>last 7 observations</span></div><div class="trend-list">{trend_bars}</div><blockquote class="pull-quote">趋势是线索，不是结论；回到信源，才是判断的开始。</blockquote></article>
-            <article class="panel"><div class="panel-title"><h3>热门关键词</h3><span>top signals</span></div><div class="keyword-cloud">{chips}</div><div style="height:30px"></div><div class="panel-title"><h3>风险提示</h3><span>watchlist / {risk_count:02d}</span></div><ul class="risk-list">{risk_items}</ul></article>
+            <article class="panel trend-panel"><div class="panel-title"><h3>声量趋势</h3><span>last 7 observations</span></div><div class="trend-list">{trend_bars}</div><blockquote class="pull-quote">趋势是线索，不是结论；回到信源，才是判断的开始。</blockquote></article>
+            <div class="narrative-stack">
+              <article class="panel"><div class="panel-title"><h3>热门关键词</h3><span>top signals</span></div><div class="keyword-cloud">{chips}</div></article>
+              <article class="panel"><div class="panel-title"><h3>风险提示</h3><span>watchlist / {risk_count:02d}</span></div><ul class="risk-list">{risk_items}</ul></article>
+            </div>
           </div>
           <div class="pager"><button type="button" data-next="page-2">←&nbsp;&nbsp;上一页</button><span class="pager-center"><b>03</b> / 04</span><button type="button" data-next="page-4">下一页&nbsp;&nbsp;→</button></div>
         </div>
