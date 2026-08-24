@@ -27,6 +27,7 @@ Used by `.github/workflows/ci.yml` (workflow_dispatch):
 
 from __future__ import annotations
 
+import hashlib
 import argparse
 import html
 import json
