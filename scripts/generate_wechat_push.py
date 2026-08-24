@@ -949,6 +949,207 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
 </html>
 '''
 
+
+def render_push_content(topic: str, data: Dict[str, Any]) -> str:
+    """Render a WeChat-message-safe briefing in the same e-magazine x e-ink style.
+
+    The WeChat message page (PushPlus ``template: html``) strips ``<style>``
+    blocks, ``<script>`` and external fonts, so this variant is a compact
+    fragment where *every* rule is inlined on the element.  Layout relies on
+    plain block elements and tables only, which WeChat renders faithfully.
+    Palette mirrors render_html(): light-gray paper #e9ebed, ink #0b0c0d,
+    neon #c6ff00; small type throughout.
+    """
+    sentiment = data.get("sentiment") or {}
+    heat = data.get("heat") or {}
+    platforms = data.get("platform_stats") or {}
+    keywords = data.get("keywords") or []
+    risks = data.get("risks") or []
+    posts = data.get("posts") or []
+    findings = (data.get("query_summary") or {}).get("key_findings") or []
+    generated = data.get("analysis_time") or datetime.now().strftime("%Y-%m-%d %H:%M")
+    source_label = "实时 RSS 抓取" if data.get("data_source") == "rss_news" else "离线示例数据"
+
+    pos = int(sentiment.get("positive", 0) or 0)
+    neg = int(sentiment.get("negative", 0) or 0)
+    neu = int(sentiment.get("neutral", 0) or 0)
+    total = max(pos + neg + neu, 1)
+    pos_pct = round(pos / total * 100)
+    neg_pct = round(neg / total * 100)
+    neu_pct = 100 - pos_pct - neg_pct
+    dominant = SENTIMENT_ZH.get(sentiment.get("dominant", "neutral"), "中性")
+    mention_count = int(heat.get("total_mentions", len(posts)) or 0)
+    risk_count = len(risks)
+
+    # --- shared inline-style shorthands (e-ink palette) ---
+    INK = "#0b0c0d"
+    NEON = "#c6ff00"
+    PAPER = "#e9ebed"
+    CARD = "#f7f8f9"
+    MUTED = "#6d7378"
+    HAIR = "1px solid rgba(11,12,13,.16)"
+    MONO = "font-family:'IBM Plex Mono',Menlo,Consolas,monospace;"
+    SERIF = "font-family:'Noto Serif SC',Georgia,serif;"
+    hl = f"background:{INK};color:{NEON};padding:1px 6px;font-weight:600;"
+
+    def sec_head(num: str, title: str) -> str:
+        return (
+            f'<div style="margin:22px 0 8px;">'
+            f'<span style="{MONO}background:{INK};color:{NEON};font-size:9px;letter-spacing:2px;padding:3px 8px;">{num}</span>'
+            f'<span style="{SERIF}background:{INK};color:{NEON};font-size:14px;font-weight:700;padding:3px 10px;margin-left:6px;">{title}</span>'
+            f'</div>'
+        )
+
+    def bar(pct: int, label: str, value: str) -> str:
+        width = max(int(pct), 4)
+        return (
+            f'<div style="margin:0 0 9px;">'
+            f'<div style="font-size:11px;color:#33373b;margin-bottom:3px;">{label}'
+            f' <span style="{MONO}{hl}font-size:9px;">{value}</span></div>'
+            f'<div style="background:#dcdfe2;height:8px;border:{HAIR};">'
+            f'<div style="background:{NEON};height:8px;width:{width}%;"></div></div>'
+            f'</div>'
+        )
+
+    # metrics 2x2 table
+    def metric_cell(label: str, value: str, note: str, accent: bool = False) -> str:
+        value_style = f"{SERIF}font-size:20px;font-weight:700;line-height:1.2;" + (
+            f"background:{INK};color:{NEON};padding:0 6px;display:inline-block;" if accent else f"color:{INK};"
+        )
+        return (
+            f'<td style="width:50%;background:{CARD};border:{HAIR};border-top:3px solid {NEON if accent else INK};padding:10px 12px;vertical-align:top;">'
+            f'<div style="{MONO}font-size:8px;letter-spacing:1.5px;color:{MUTED};text-transform:uppercase;">{label}</div>'
+            f'<div style="margin:6px 0 1px;"><span style="{value_style}">{value}</span></div>'
+            f'<div style="font-size:10px;color:{MUTED};">{note}</div></td>'
+        )
+
+    heat_score = _escape(heat.get("heat_score", "—"))
+    heat_level = _escape(heat.get("heat_level", "—"))
+    metrics_table = (
+        f'<table style="width:100%;border-collapse:separate;border-spacing:5px 5px;margin:8px -5px 0;"><tbody>'
+        f'<tr>{metric_cell("Heat index", heat_score, heat_level + " 热度", True)}'
+        f'{metric_cell("Mentions", str(mention_count), "公开提及总量")}</tr>'
+        f'<tr>{metric_cell("Neutral share", f"{neu_pct}%", "中性讨论占比")}'
+        f'{metric_cell("Watchlist", f"{risk_count:02d}", "待跟进风险信号", True)}</tr>'
+        f'</tbody></table>'
+    )
+
+    # channels: top 5 bars
+    platform_items = list(platforms.items())[:5]
+    max_count = max((int(s.get("count", 0) or 0) for _n, s in platform_items), default=1)
+    channel_bars = "".join(
+        bar(
+            int(int(s.get("count", 0) or 0) / max_count * 100),
+            _escape(name),
+            f"{_escape(s.get('count', 0))} · {_escape(s.get('percentage', 0))}%",
+        )
+        for name, s in platform_items
+    ) or f'<p style="font-size:11px;color:{MUTED};">暂无平台数据</p>'
+
+    # keywords chips
+    chips = "".join(
+        f'<span style="display:inline-block;background:{INK};color:{NEON};font-size:11px;padding:3px 10px;margin:0 6px 6px 0;">{_escape(k)}</span>'
+        for k in keywords[:10]
+    ) or f'<span style="font-size:11px;color:{MUTED};">暂无关键词</span>'
+
+    # risks top 3
+    risk_rows = "".join(
+        f'<div style="border-bottom:{HAIR};padding:8px 0;">'
+        f'<span style="{MONO}{hl}font-size:8px;">{_escape(RISK_ZH.get(r.get("risk_level"), r.get("risk_level", "低")))}</span>'
+        f'<span style="font-size:11.5px;color:#33373b;margin-left:8px;">{_escape((r.get("text_preview") or "")[:80])}</span></div>'
+        for r in risks[:3]
+    ) or f'<p style="font-size:11px;color:{MUTED};">未识别到明显风险信号。</p>'
+
+    # findings
+    finding_rows = "".join(
+        f'<div style="border-bottom:{HAIR};padding:8px 0;font-size:12px;color:#33373b;">'
+        f'<span style="{MONO}{hl}font-size:8.5px;margin-right:8px;">{i:02d}</span>{_escape(f)}</div>'
+        for i, f in enumerate(findings[:6], 1)
+    ) or f'<p style="font-size:11px;color:{MUTED};">暂无要点</p>'
+
+    # sources top 10 (linked)
+    source_rows = "".join(
+        f'<div style="border-bottom:{HAIR};padding:8px 0;">'
+        f'<a href="{_escape(p.get("url") or "#")}" style="font-size:12px;color:{INK};font-weight:500;text-decoration:none;">'
+        f'{i:02d}. {_escape((p.get("title") or p.get("content") or "")[:60])}</a>'
+        f'<div style="{MONO}font-size:8.5px;color:{MUTED};margin-top:2px;">'
+        f'{_escape("EN" if p.get("language") == "en" else "中文" if p.get("language") == "zh" else "来源")}'
+        f' · {_escape(p.get("feed_name") or p.get("nickname", ""))}'
+        f' · {_escape(SENTIMENT_ZH.get(p.get("sentiment", "neutral"), "中性"))}</div></div>'
+        for i, p in enumerate(posts[:10], 1)
+    ) or f'<p style="font-size:11px;color:{MUTED};">暂无信源</p>'
+
+    card = f'background:{CARD};border:{HAIR};padding:14px 16px;margin:0 0 10px;'
+
+    return (
+        f'<div style="background:{PAPER};padding:14px 12px;color:{INK};'
+        f"font-family:'Noto Sans SC',-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;"
+        f'font-size:13px;line-height:1.75;">'
+
+        # --- hero (black block) ---
+        f'<div style="background:{INK};padding:24px 20px 18px;margin-bottom:14px;">'
+        f'<div style="{MONO}color:{NEON};font-size:9px;letter-spacing:3px;text-transform:uppercase;">OCTOPUS AI INTELLIGENCE</div>'
+        f'<div style="{SERIF}color:{NEON};font-size:24px;font-weight:700;line-height:1.25;margin:10px 0 6px;">章鱼 AI 全景分析</div>'
+        f'<div style="{SERIF}color:rgba(232,234,237,.78);font-size:12.5px;">全网 AI 调研境内境外数据，由多个大模型混合部署。</div>'
+        f'<div style="margin-top:12px;">'
+        f'<span style="{MONO}border:1px solid rgba(198,255,0,.4);color:{NEON};font-size:9px;padding:3px 8px;margin-right:6px;">主题 {_escape(topic)}</span>'
+        f'<span style="{MONO}border:1px solid rgba(198,255,0,.4);color:{NEON};font-size:9px;padding:3px 8px;">样本 {mention_count:02d} 条</span></div>'
+        f'<div style="border-top:1px solid rgba(198,255,0,.22);margin-top:14px;padding-top:10px;">'
+        f'<span style="{SERIF}color:{NEON};font-size:22px;font-weight:700;">{_escape(heat.get("heat_score", "—"))}</span>'
+        f'<span style="{MONO}color:rgba(232,234,237,.5);font-size:8px;letter-spacing:2px;margin-left:8px;">HEAT INDEX</span></div>'
+        f'</div>'
+
+        # --- 01 结论 ---
+        f'{sec_head("01", "先看结论")}'
+        f'<div style="{card}border-left:4px solid {NEON};">'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:6px;">编辑按语</div>'
+        f'<div style="font-size:12.5px;color:#33373b;">本期围绕「{_escape(topic)}」的公开信息共整理'
+        f' <span style="{hl}">{mention_count}</span> 条，主导情感为 <span style="{hl}">{_escape(dominant)}</span>，'
+        f'热度处于 <span style="{hl}">{_escape(heat.get("heat_level", "—"))}</span> 区间。'
+        f'建议先关注声量最大的渠道，再回到原始信源核验判断。</div></div>'
+        f'{metrics_table}'
+
+        # --- 02 分布 ---
+        f'{sec_head("02", "情绪与声量分布")}'
+        f'<div style="{card}">'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:10px;">情感光谱 <span style="{MONO}font-size:8.5px;color:{MUTED};font-weight:400;">n = {total}</span></div>'
+        f'{bar(pos_pct, "正面", f"{pos} / {pos_pct}%")}'
+        f'{bar(neu_pct, "中性", f"{neu} / {neu_pct}%")}'
+        f'{bar(neg_pct, "负面", f"{neg} / {neg_pct}%")}</div>'
+        f'<div style="{card}">'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:10px;">渠道分布</div>{channel_bars}</div>'
+
+        # --- 03 叙事 ---
+        f'{sec_head("03", "讨论正在说什么")}'
+        f'<div style="{card}">'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:8px;">热门关键词</div>{chips}</div>'
+        f'<div style="{card}">'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:4px;">风险提示 <span style="{MONO}font-size:8.5px;color:{MUTED};font-weight:400;">watchlist / {risk_count:02d}</span></div>{risk_rows}</div>'
+
+        # --- 04 要点与信源 ---
+        f'{sec_head("04", "要点与信源")}'
+        f'<div style="{card}">'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:4px;">编辑要点</div>{finding_rows}</div>'
+        f'<div style="{card}">'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:4px;">信源列表 <span style="{MONO}font-size:8.5px;color:{MUTED};font-weight:400;">top 10 / {mention_count} items</span></div>{source_rows}</div>'
+
+        # --- colophon (black block) ---
+        f'<div style="background:{INK};padding:18px 18px 14px;margin-top:18px;color:rgba(232,234,237,.82);">'
+        f'<div style="border-bottom:1px solid rgba(198,255,0,.25);padding-bottom:9px;margin-bottom:9px;">'
+        f'<span style="{SERIF}color:{NEON};font-size:13px;font-weight:700;">作者：章鱼 ai</span>'
+        f'<span style="{MONO}color:rgba(232,234,237,.55);font-size:8.5px;letter-spacing:1.5px;margin-left:10px;">仅供参考 · 分析研究</span></div>'
+        f'<div style="font-size:11px;line-height:1.8;">全网境内外为你寻找蛛丝马迹，提供全景视野分析，由多模型协同推理决策。'
+        f'底层所使用的大语言模型（LLM）多模式背后结合使用了多种不同的先进模型，包括但不限于 Claude、ChatGPT、Gemini、Grok、Qwen 以及 Kimi。'
+        f'根据不同的资产管理任务需求，更好地发挥各个模型的优势来提供数据支持！'
+        f'<span style="background:{NEON};color:{INK};padding:0 4px;font-weight:600;">[加油]</span></div>'
+        f'<div style="{MONO}border-top:1px solid rgba(232,234,237,.14);margin-top:10px;padding-top:8px;'
+        f'font-size:7.5px;letter-spacing:2px;color:rgba(232,234,237,.4);text-transform:uppercase;">'
+        f'OCTOPUS AI · PANORAMA&nbsp;&nbsp;|&nbsp;&nbsp;{_escape(source_label)} · {_escape(generated)}&nbsp;&nbsp;|&nbsp;&nbsp;END OF BRIEF</div>'
+        f'</div>'
+        f'</div>'
+    )
+
+
 # ---------------------------------------------------------------------------
 # Push & CLI
 # ---------------------------------------------------------------------------
@@ -1008,8 +1209,10 @@ def generate(topic: str, offline: Optional[bool] = None, limit: int = DEFAULT_LI
     report["data_source"] = insight["data_source"]
     report["rss_coverage"] = insight["rss_coverage"]
     html_doc = render_html(topic, report, template_name)
+    push_content = render_push_content(topic, report)
     return {
         "html": html_doc,
+        "push_content": push_content,
         "report": report,
         "template": template_name,
         "data_source": insight["data_source"],
@@ -1042,9 +1245,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(result["html"], encoding="utf-8")
+    push_preview = out.with_name(out.stem + ".push" + out.suffix)
+    push_preview.write_text(result["push_content"], encoding="utf-8")
     print(
         f"Wrote {out} (template={result['template']}, "
-        f"data_source={result['data_source']})"
+        f"data_source={result['data_source']}); "
+        f"push preview: {push_preview}"
     )
 
     if args.push:
@@ -1052,7 +1258,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if not token:
             print("PUSHPLUS_TOKEN is empty; skip push.", file=sys.stderr)
             return 0
-        resp = push_via_pushplus("章鱼 AI 全景分析", result["html"], token)
+        resp = push_via_pushplus("章鱼 AI 全景分析", result["push_content"], token)
         print(f"PushPlus response: {resp}")
         code = resp.get("code")
         if code not in (200, "200", 0, "0"):
