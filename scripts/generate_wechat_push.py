@@ -9,8 +9,9 @@ Data pipeline
    no API key required).
 2. Run the library analyzers: platform stats, heat index, sentiment
    distribution, keyword extraction, and risk identification.
-3. Render a deep, paginated HTML briefing (coverage / sentiment / keywords /
-   channels / trend / risks / findings / linked source archive).
+3. Render a vertical long-form HTML briefing in Guizang PPT Skill "Style A"
+   (电子杂志 × 电子墨水, WeChat-reading friendly: coverage / sentiment /
+   keywords / channels / trend / risks / findings / linked source archive).
 
 Offline safety: when the network is unavailable, fetching fails, or
 ``--offline`` / ``WECHAT_PUSH_OFFLINE=1`` is set, the pipeline falls back
@@ -522,7 +523,7 @@ def build_insight(topic: str, offline: bool = False, limit: int = DEFAULT_LIMIT)
 # ---------------------------------------------------------------------------
 
 def _sentiment_badge(label: str) -> str:
-    color = {"positive": "#64ffda", "negative": "#ff6b6b", "neutral": "#8892b0"}.get(label, "#8892b0")
+    color = {"positive": "#3c7a00", "negative": "#0c0c0d", "neutral": "#8a8a83"}.get(label, "#8a8a83")
     return (
         f'<span class="meta-badge" style="color:{color};">'
         f'{SENTIMENT_ZH.get(label, label)}</span>'
@@ -530,11 +531,12 @@ def _sentiment_badge(label: str) -> str:
 
 
 def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
-    """Render a compact but editorial, paginated HTML briefing.
+    """Render a vertical long-form editorial briefing (Guizang Style A).
 
-    The WeChat page is intentionally self-contained: CSS carries the visual
-    system and a small amount of vanilla JS handles paging and keyboard
-    navigation, so the generated artifact works when opened as a local file.
+    电子杂志 × 电子墨水: light-gray paper background, black body text, neon-green
+    on black for headings and emphasis, hairline rules, small type. The page is
+    a single scrolling column sized for WeChat reading — self-contained CSS,
+    no JavaScript, system font stacks only.
     """
     sentiment = data.get("sentiment") or {}
     heat = data.get("heat") or {}
@@ -654,203 +656,152 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
 
     css = r'''
     :root {
-      --paper: #e9ebed;           /* 整体浅灰背景 */
-      --card: #f7f8f9;            /* 卡片纸面 */
-      --ink: #0b0c0d;             /* 正文黑 */
-      --ink-soft: #33373b;
-      --muted: #6d7378;
-      --hair: rgba(11, 12, 13, .16);   /* 发丝线 */
-      --hair-strong: rgba(11, 12, 13, .32);
-      --neon: #c6ff00;            /* 荧光绿 */
-      --neon-dim: #a8d900;
-      --neg: #0b0c0d;
-      --neu: #b3b8bc;
-      --serif: 'Noto Serif SC', source-han-serif-sc, Georgia, serif;
-      --sans: 'Noto Sans SC', source-han-sans-sc, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-      --mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+      --paper: #e9e9e5;        /* 整体浅灰纸底 */
+      --paper-tint: #dfdfda;
+      --ink: #0c0c0d;          /* 正文黑 */
+      --ink-rgb: 12, 12, 13;
+      --neon: #b8ff2e;         /* 荧光绿 */
+      --neon-soft: rgba(184, 255, 46, .32);
+      --mist: #8a8a83;
+      --serif: 'Noto Serif SC', 'Songti SC', 'SimSun', Georgia, serif;
+      --sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+      --mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; background: var(--paper); }
-    body {
-      min-width: 320px; margin: 0; color: var(--ink); background: var(--paper);
-      font-family: var(--sans); font-size: 13px; line-height: 1.75;
-      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
-    }
-    a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--hair-strong); }
-    a:hover { background: var(--ink); color: var(--neon); border-bottom-color: var(--ink); }
+    html { background: var(--paper); }
+    body { min-width: 300px; margin: 0; color: var(--ink); background: var(--paper);
+      background-image: radial-gradient(rgba(var(--ink-rgb), .045) 1px, transparent 1px); background-size: 22px 22px;
+      font-family: var(--sans); font-size: 13.5px; line-height: 1.8; -webkit-font-smoothing: antialiased; }
+    a { color: var(--ink); text-decoration: none; }
     h1, h2, h3, p { margin-top: 0; }
-    .hl { padding: 1px 6px; background: var(--ink); color: var(--neon); font-weight: 600; }
+    .muted { color: var(--mist); }
+    .sheet { max-width: 640px; margin: 0 auto; padding: 34px 20px 46px; }
 
-    /* ---- 顶部黑条 ---- */
-    .chrome { position: sticky; top: 0; z-index: 30; background: var(--ink); color: var(--neon); }
-    .chrome-inner { display: flex; align-items: center; justify-content: space-between; gap: 14px;
-      max-width: 680px; margin: 0 auto; padding: 9px 18px;
-      font-family: var(--mono); font-size: 9px; letter-spacing: .24em; text-transform: uppercase; }
-    .chrome b { font-weight: 500; }
-    .chrome i { font-style: normal; opacity: .55; }
+    /* --- masthead --- */
+    .masthead { border-top: 3px solid var(--ink); padding-top: 8px; }
+    .masthead-rule { height: 1px; background: var(--ink); margin-bottom: 22px; }
+    .kicker { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 20px;
+      font-family: var(--mono); font-size: 9px; letter-spacing: .28em; text-transform: uppercase; color: var(--ink); opacity: .72; }
+    .masthead h1 { display: inline-block; margin: 0 0 12px; padding: 8px 16px 9px; background: var(--ink); color: var(--neon);
+      font-family: var(--serif); font-size: 27px; font-weight: 700; line-height: 1.25; letter-spacing: .01em; }
+    .subtitle { margin: 4px 0 0; font-family: var(--serif); font-size: 14.5px; line-height: 1.75; color: var(--ink); }
+    .subtitle em { font-style: normal; border-bottom: 2px solid var(--neon); }
+    .meta-line { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 18px; padding: 10px 0;
+      border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
+      font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; color: var(--ink); }
+    .meta-line b { font-weight: 700; background: var(--ink); color: var(--neon); padding: 0 5px; }
 
-    .wrap { max-width: 680px; margin: 0 auto; padding: 22px 18px 60px; }
-    section { scroll-margin-top: 52px; }
+    /* --- section head --- */
+    .sec { margin-top: 40px; }
+    .sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; border-bottom: 1px solid var(--ink); padding-bottom: 10px; }
+    .sec-head .no { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: var(--ink); opacity: .55; }
+    .sec-head h2 { display: inline-block; margin: 0; padding: 3px 10px 4px; background: var(--ink); color: var(--neon);
+      font-family: var(--serif); font-size: 15.5px; font-weight: 700; letter-spacing: .04em; }
+    .sec-head .en { margin-left: auto; font-family: var(--mono); font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--mist); }
 
-    /* ---- 封面头版（黑底） ---- */
-    .hero { position: relative; margin-bottom: 26px; padding: 34px 26px 28px; background: var(--ink); color: #e8eaed; overflow: hidden; }
-    .hero::before { content: ''; position: absolute; inset: 10px; border: 1px solid rgba(198,255,0,.25); pointer-events: none; }
-    .hero > * { position: relative; }
-    .kicker { display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
-      color: var(--neon); font-family: var(--mono); font-size: 9px; letter-spacing: .3em; text-transform: uppercase; }
-    .kicker::after { content: ''; flex: 1; height: 1px; background: rgba(198,255,0,.35); }
-    .hero h1 { margin: 0 0 10px; color: var(--neon); font-family: var(--serif); font-size: 27px; font-weight: 700; line-height: 1.2; letter-spacing: .01em; }
-    .hero-sub { margin: 0 0 18px; color: rgba(232,234,237,.78); font-family: var(--serif); font-size: 13px; line-height: 1.7; }
-    .hero-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-    .hero-tags span { padding: 4px 10px; border: 1px solid rgba(198,255,0,.4); color: var(--neon);
-      font-family: var(--mono); font-size: 9px; letter-spacing: .14em; text-transform: uppercase; }
-    .hero-tags b { font-weight: 500; }
-    .hero-foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; margin-top: 22px; padding-top: 14px; border-top: 1px solid rgba(198,255,0,.22); }
-    .hero-foot small { color: rgba(232,234,237,.55); font-family: var(--mono); font-size: 8.5px; letter-spacing: .18em; text-transform: uppercase; }
-    .heat-block { text-align: right; }
-    .heat-block b { display: block; color: var(--neon); font-family: var(--serif); font-size: 30px; font-weight: 700; line-height: 1; }
-    .heat-block span { display: block; margin-top: 4px; color: rgba(232,234,237,.5); font-family: var(--mono); font-size: 8px; letter-spacing: .24em; }
+    /* --- editor note --- */
+    .note-text { margin: 0; font-family: var(--serif); font-size: 14px; line-height: 1.95; color: var(--ink); }
+    .note-text strong, .hl { font-weight: 600; background: var(--ink); color: var(--neon); padding: 1px 6px 2px; margin: 0 1px; }
 
-    /* ---- 章节标题：黑底荧光绿 ---- */
-    .section-head { display: flex; align-items: center; gap: 10px; margin: 34px 0 6px; }
-    .section-num { flex: none; padding: 3px 8px; background: var(--ink); color: var(--neon);
-      font-family: var(--mono); font-size: 9px; letter-spacing: .18em; }
-    .section-head h2 { margin: 0; display: inline-block; padding: 3px 10px; background: var(--ink); color: var(--neon);
-      font-family: var(--serif); font-size: 15px; font-weight: 700; letter-spacing: .04em; }
-    .section-head::after { content: ''; flex: 1; height: 1px; background: var(--hair-strong); }
-    .section-lede { margin: 0 0 14px; color: var(--muted); font-size: 11.5px; }
+    /* --- stats --- */
+    .stat-hero { display: flex; align-items: baseline; gap: 14px; padding: 16px 0 6px; }
+    .stat-hero .n { font-family: var(--serif); font-size: 54px; font-weight: 800; line-height: .9; letter-spacing: -.02em; font-feature-settings: 'tnum'; }
+    .stat-hero .l { font-family: var(--mono); font-size: 9.5px; letter-spacing: .18em; text-transform: uppercase; color: var(--mist); line-height: 1.9; }
+    .stat-hero .l i { display: block; font-style: normal; color: var(--ink); }
+    .stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); border-top: 1px solid var(--ink); border-left: 1px solid var(--ink); margin-top: 14px; }
+    .stat-cell { padding: 12px 14px; border-right: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+    .stat-cell .n { font-family: var(--serif); font-size: 24px; font-weight: 700; line-height: 1.05; font-feature-settings: 'tnum'; }
+    .stat-cell .n.neon { display: inline-block; padding: 0 7px; background: var(--ink); color: var(--neon); }
+    .stat-cell .l { margin-top: 4px; font-family: var(--mono); font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--mist); }
+    .cov-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--ink); border-left: 1px solid var(--ink); }
+    .cov-cell { padding: 10px 10px 9px; border-right: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+    .cov-cell b { display: block; font-family: var(--serif); font-size: 20px; font-weight: 700; line-height: 1; }
+    .cov-cell span { display: block; margin-top: 5px; font-family: var(--mono); font-size: 8px; letter-spacing: .06em; text-transform: uppercase; color: var(--mist); }
+    .cov-note { margin: 10px 0 0; font-size: 12px; color: var(--mist); }
 
-    /* ---- 卡片：纸面 + 发丝线 ---- */
-    .panel { margin-bottom: 14px; padding: 18px 20px; border: 1px solid var(--hair); background: var(--card); }
-    .panel-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding-bottom: 9px; border-bottom: 1px solid var(--hair); }
-    .panel-title h3 { margin: 0; font-family: var(--serif); font-size: 13.5px; font-weight: 700; }
-    .panel-title span { color: var(--muted); font-family: var(--mono); font-size: 8.5px; letter-spacing: .12em; text-transform: uppercase; }
-
-    .note { position: relative; margin-bottom: 14px; padding: 18px 20px 18px 24px; border: 1px solid var(--hair); background: var(--card); }
-    .note::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--neon); }
-    .note h3 { margin-bottom: 8px; font-family: var(--serif); font-size: 13.5px; font-weight: 700; }
-    .note p { margin-bottom: 0; color: var(--ink-soft); font-size: 12.5px; }
-    .note strong { padding: 1px 6px; background: var(--ink); color: var(--neon); font-weight: 600; }
-    .snapshot { display: flex; flex-direction: column; justify-content: center; margin-bottom: 14px; padding: 16px 20px; background: var(--ink); color: var(--neon); }
-    .snapshot-label { color: rgba(198,255,0,.6); font-family: var(--mono); font-size: 8.5px; letter-spacing: .2em; text-transform: uppercase; }
-    .snapshot strong { display: block; margin: 8px 0 2px; font-family: var(--serif); font-size: 24px; font-weight: 700; line-height: 1; }
-    .snapshot small { color: rgba(232,234,237,.6); font-size: 10.5px; }
-
-    .coverage-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 14px; border: 1px solid var(--hair-strong); background: var(--hair-strong); }
-    .coverage-item { padding: 12px 12px; background: var(--card); }
-    .coverage-item strong { display: block; font-family: var(--serif); font-size: 18px; font-weight: 700; line-height: 1; }
-    .coverage-item span { display: block; margin-top: 6px; color: var(--muted); font-family: var(--mono); font-size: 7.5px; letter-spacing: .06em; text-transform: uppercase; }
-    .coverage-note { margin: 10px 2px 0; color: var(--muted); font-size: 11px; }
-
-    .metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; }
-    .metric { position: relative; min-height: 86px; padding: 14px 16px; border: 1px solid var(--hair); background: var(--card); }
-    .metric::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--ink); }
-    .metric.accent::before, .metric.alert::before { background: var(--neon); }
-    .metric-label { color: var(--muted); font-family: var(--mono); font-size: 8px; letter-spacing: .14em; text-transform: uppercase; }
-    .metric-value { display: block; margin: 8px 0 1px; font-family: var(--serif); font-size: 22px; font-weight: 700; line-height: 1; color: var(--ink); }
-    .metric-note { color: var(--muted); font-size: 10.5px; }
-    .metric.accent .metric-value { padding: 0 6px; display: inline-block; background: var(--ink); color: var(--neon); }
-    .metric.alert .metric-value { padding: 0 6px; display: inline-block; background: var(--ink); color: var(--neon); }
-
-    /* ---- 情感 / 渠道 ---- */
-    .sentiment-layout { display: grid; grid-template-columns: 128px 1fr; align-items: center; gap: 18px; }
-    .donut { width: 128px; height: 128px; display: grid; place-items: center; border-radius: 50%;
-      background: conic-gradient(var(--neon) 0deg var(--pos-deg), var(--neu) var(--pos-deg) var(--neu-deg), var(--ink) var(--neu-deg) 360deg);
-      box-shadow: 0 0 0 1px var(--hair); }
-    .donut::after { content: ''; width: 82px; height: 82px; border-radius: 50%; background: var(--card); box-shadow: inset 0 0 0 1px var(--hair); }
+    /* --- sentiment --- */
+    .sentiment-layout { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 20px; }
+    .donut { width: 120px; height: 120px; display: grid; place-items: center; border-radius: 50%;
+      background: conic-gradient(var(--neon) 0deg var(--pos-deg), #c8c8c0 var(--pos-deg) var(--neu-deg), var(--ink) var(--neu-deg) 360deg);
+      box-shadow: 0 0 0 1px var(--ink); }
+    .donut::after { content: ''; width: 76px; height: 76px; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 1px var(--ink); }
     .legend { display: grid; gap: 8px; }
-    .legend-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink-soft); font-size: 11.5px; }
-    .legend-row b { color: var(--ink); font-family: var(--mono); font-size: 10px; font-weight: 600; }
-    .legend-row i { width: 9px; height: 9px; margin-right: 7px; display: inline-block; background: var(--neon); box-shadow: 0 0 0 1px var(--hair-strong); }
-    .legend-row i.neutral { background: var(--neu); } .legend-row i.negative { background: var(--ink); }
+    .legend-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink); }
+    .legend-row b { font-family: var(--mono); font-size: 11px; font-weight: 500; }
+    .legend-row i { width: 9px; height: 9px; margin-right: 7px; display: inline-block; background: var(--neon); box-shadow: 0 0 0 1px var(--ink); }
+    .legend-row i.neutral { background: #c8c8c0; } .legend-row i.negative { background: var(--ink); }
 
+    /* --- bars / table --- */
     .channel-list { display: grid; gap: 12px; }
-    .channel-label { display: flex; justify-content: space-between; margin-bottom: 5px; color: var(--ink-soft); font-size: 11.5px; font-weight: 500; }
-    .channel-label b, .channel-share { font-family: var(--mono); font-size: 9.5px; font-weight: 600; }
-    .channel-label b { padding: 0 5px; background: var(--ink); color: var(--neon); }
-    .channel-row { display: grid; grid-template-columns: minmax(60px, .4fr) 1fr 38px; align-items: center; column-gap: 8px; }
+    .channel-label { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12.5px; color: var(--ink); }
+    .channel-label b, .channel-share { font-family: var(--mono); font-size: 10px; font-weight: 700; }
+    .channel-row { display: grid; grid-template-columns: 1fr 40px; align-items: center; column-gap: 8px; }
     .channel-row .channel-label { grid-column: 1 / -1; }
-    .channel-row .channel-track { grid-column: 1 / 3; }
-    .channel-row .channel-share { grid-column: 3; }
-    .channel-track, .trend-track { height: 8px; overflow: hidden; background: #dcdfe2; box-shadow: inset 0 0 0 1px var(--hair); }
-    .channel-track i, .trend-track i { display: block; height: 100%; background: var(--neon); box-shadow: inset 0 0 0 1px rgba(11,12,13,.4);
-      transform-origin: left; animation: grow .8s cubic-bezier(.16,1,.3,1) both; }
-    .channel-share { text-align: right; color: var(--muted); }
-
-    .data-table { width: 100%; margin-top: 4px; border-collapse: collapse; font-size: 11.5px; }
-    .data-table th { color: var(--muted); font-family: var(--mono); font-size: 8px; font-weight: 600; letter-spacing: .12em; text-align: left; text-transform: uppercase; }
-    .data-table th, .data-table td { padding: 9px 8px; border-bottom: 1px solid var(--hair); }
-    .data-table td { color: var(--ink-soft); } .data-table td:first-child { color: var(--ink); font-weight: 600; }
-
-    /* ---- 叙事 ---- */
+    .channel-track, .trend-track { height: 8px; background: transparent; box-shadow: inset 0 0 0 1px var(--ink); }
+    .channel-track i, .trend-track i { display: block; height: 100%; background: var(--ink);
+      background-image: linear-gradient(90deg, var(--neon), var(--neon) 3px, transparent 3px); background-repeat: no-repeat; background-position: right; }
+    .channel-share { text-align: right; color: var(--ink); }
+    .data-table { width: 100%; margin-top: 2px; border-collapse: collapse; font-size: 12px; }
+    .data-table th { font-family: var(--mono); font-size: 8.5px; font-weight: 700; letter-spacing: .12em; text-align: left; text-transform: uppercase;
+      background: var(--ink); color: var(--neon); }
+    .data-table th, .data-table td { padding: 8px 9px; border-bottom: 1px solid rgba(var(--ink-rgb), .35); }
+    .data-table td { color: var(--ink); font-feature-settings: 'tnum'; } .data-table td:first-child { font-weight: 600; }
     .trend-list { display: grid; gap: 11px; }
-    .trend-row { display: grid; grid-template-columns: 74px 1fr 26px; align-items: center; gap: 10px; }
-    .trend-row time, .trend-row b { color: var(--muted); font-family: var(--mono); font-size: 9px; font-weight: 500; }
-    .trend-row b { padding: 0 4px; background: var(--ink); color: var(--neon); font-weight: 600; text-align: center; }
-    .pull-quote { margin: 16px 0 0; padding: 12px 16px; border-left: 3px solid var(--neon); background: rgba(198,255,0,.12);
-      color: var(--ink-soft); font-family: var(--serif); font-size: 12px; line-height: 1.65; }
+    .trend-row { display: grid; grid-template-columns: 78px 1fr 26px; align-items: center; gap: 10px; }
+    .trend-row time, .trend-row b { font-family: var(--mono); font-size: 9.5px; font-weight: 500; color: var(--ink); }
+    .trend-row b { text-align: right; font-weight: 700; }
+    .pull-quote { margin: 18px 0 0; padding: 10px 14px; border-left: 3px solid var(--neon); background: rgba(var(--ink-rgb), .05);
+      font-family: var(--serif); font-size: 12.5px; color: var(--ink); }
+
+    /* --- keywords / risks --- */
     .keyword-cloud { display: flex; flex-wrap: wrap; gap: 7px; }
-    .keyword { padding: 4px 10px; background: var(--ink); color: var(--neon); font-size: 11px; font-weight: 500; letter-spacing: .02em; }
-    .keyword:nth-child(3n) { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair-strong); }
-
-    .risk-list, .finding-list, .source-list { margin: 0; padding: 0; list-style: none; }
-    .risk-list { display: grid; }
-    .risk-item { display: grid; grid-template-columns: 38px 1fr; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--hair); }
-    .risk-item:last-child { border-bottom: 0; }
-    .risk-level { align-self: start; padding: 2px 0; font-family: var(--mono); font-size: 8px; font-weight: 700; text-align: center; }
+    .keyword { padding: 4px 11px; border: 1px solid var(--ink); font-size: 12px; color: var(--ink); background: transparent; }
+    .keyword:nth-child(3n+1) { background: var(--ink); color: var(--neon); border-color: var(--ink); }
+    .risk-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .risk-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--ink); background: rgba(255,255,255,.35); }
+    .risk-item strong { display: block; font-size: 12.5px; font-weight: 600; line-height: 1.6; color: var(--ink); }
+    .risk-item small { display: block; margin-top: 3px; font-size: 11px; color: var(--mist); }
+    .risk-level { flex: none; margin-top: 1px; padding: 2px 8px; font-family: var(--mono); font-size: 9px; letter-spacing: .1em; }
     .risk-high .risk-level { background: var(--ink); color: var(--neon); }
-    .risk-medium .risk-level { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--hair-strong); }
-    .risk-low .risk-level { color: var(--muted); box-shadow: inset 0 0 0 1px var(--hair); }
-    .risk-item strong { display: block; color: var(--ink-soft); font-size: 11.5px; font-weight: 500; line-height: 1.6; }
-    .risk-item small { display: block; margin-top: 4px; color: var(--muted); font-family: var(--mono); font-size: 8.5px; }
+    .risk-medium .risk-level { border: 1px solid var(--ink); color: var(--ink); }
+    .risk-low .risk-level { border: 1px solid rgba(var(--ink-rgb), .4); color: var(--mist); }
+    .empty-state { padding: 8px 2px; color: var(--mist); font-size: 12px; list-style: none; }
 
-    /* ---- 要点 / 信源 ---- */
-    .finding-list li { display: grid; grid-template-columns: 26px 1fr; gap: 12px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--hair); }
-    .finding-list li:last-child { border-bottom: 0; }
-    .finding-list li > span { padding: 1px 0; background: var(--ink); color: var(--neon); font-family: var(--mono); font-size: 8.5px; font-weight: 700; text-align: center; }
-    .finding-list p { margin: 0; color: var(--ink-soft); font-size: 12px; }
-    .source-index { color: var(--muted); font-family: var(--mono); font-size: 9px; font-weight: 600; }
-    .source-item { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--hair); }
-    .source-item:last-child { border-bottom: 0; }
-    .source-item a { display: block; color: var(--ink); font-size: 12px; font-weight: 500; line-height: 1.5; border-bottom: 0; }
-    .source-item a:hover { background: var(--ink); color: var(--neon); }
-    .source-item small { display: block; margin-top: 3px; color: var(--muted); font-family: var(--mono); font-size: 8.5px; }
-    .source-item small em { color: var(--neon-dim); font-style: normal; font-weight: 700; }
-    .source-item > span:last-child { white-space: nowrap; }
-    .source-archive { margin-top: 14px; border-top: 1px solid var(--hair); }
-    .source-archive summary { padding: 12px 0 4px; color: var(--ink); cursor: pointer; font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: .08em; list-style: none; }
-    .source-archive summary::-webkit-details-marker { display: none; }
-    .source-archive summary::before { content: '+ '; color: var(--neon-dim); font-weight: 700; }
-    .source-archive[open] summary::before { content: '− '; }
-    .meta-badge { display: inline-block; padding: 2px 7px; font-family: var(--mono); font-size: 8px; font-weight: 600; border: 1px solid currentColor; }
-    .muted, .empty-state { color: var(--muted); }
-    .empty-state { padding: 10px 0; list-style: none; }
+    /* --- findings / sources --- */
+    .finding-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .finding-list li { display: flex; gap: 12px; align-items: baseline; }
+    .finding-list li span { flex: none; padding: 0 6px; background: var(--ink); color: var(--neon); font-family: var(--mono); font-size: 10px; font-weight: 700; }
+    .finding-list li p { margin: 0; font-family: var(--serif); font-size: 13px; color: var(--ink); }
+    .source-list { display: grid; margin: 0; padding: 0; list-style: none; }
+    .source-item { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: start; padding: 10px 2px; border-bottom: 1px solid rgba(var(--ink-rgb), .3); }
+    .source-index { font-family: var(--mono); font-size: 9.5px; color: var(--mist); padding-top: 3px; }
+    .source-item a { display: block; font-family: var(--serif); font-size: 13px; font-weight: 600; line-height: 1.55; color: var(--ink);
+      border-bottom: 1px solid transparent; }
+    .source-item a:hover { background: var(--neon-soft); }
+    .source-item small { display: block; margin-top: 2px; font-size: 10.5px; color: var(--mist); }
+    .source-item small em { font-style: normal; opacity: .55; }
+    .meta-badge { flex: none; padding: 2px 8px; font-family: var(--mono); font-size: 9px; letter-spacing: .06em; border: 1px solid rgba(var(--ink-rgb), .4); }
+    .source-archive { margin-top: 12px; }
+    .source-archive summary { cursor: pointer; padding: 8px 12px; border: 1px dashed var(--ink); font-family: var(--mono); font-size: 10.5px; color: var(--ink); }
+    .source-archive summary:hover { background: var(--neon-soft); }
+    .source-archive[open] summary { margin-bottom: 8px; }
 
-    /* ---- 文末落款（黑底） ---- */
-    .colophon { margin-top: 30px; padding: 22px 22px 18px; background: var(--ink); color: rgba(232,234,237,.82); }
-    .colophon-author { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid rgba(198,255,0,.25); }
-    .colophon-author b { color: var(--neon); font-family: var(--serif); font-size: 14px; font-weight: 700; }
-    .colophon-author span { color: rgba(232,234,237,.55); font-family: var(--mono); font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; }
-    .colophon p { margin: 0; font-size: 11px; line-height: 1.8; }
-    .colophon p em { font-style: normal; padding: 0 4px; background: var(--neon); color: var(--ink); font-weight: 600; }
-    .colophon-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 10px; border-top: 1px solid rgba(232,234,237,.14);
-      color: rgba(232,234,237,.4); font-family: var(--mono); font-size: 7.5px; letter-spacing: .18em; text-transform: uppercase; }
+    /* --- closing --- */
+    .closing { margin-top: 40px; border-top: 3px solid var(--ink); padding-top: 4px; }
+    .closing-rule { height: 1px; background: var(--ink); margin-bottom: 16px; }
+    .closing p { font-family: var(--serif); font-size: 13px; line-height: 1.95; color: var(--ink); }
+    .byline { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 18px; margin-top: 18px; padding: 10px 12px; background: var(--ink); color: var(--neon);
+      font-family: var(--serif); font-size: 12.5px; }
+    .colophon { margin-top: 14px; text-align: center; font-family: var(--mono); font-size: 8.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--mist); }
 
-    .to-top { position: fixed; right: 16px; bottom: 16px; z-index: 40; width: 38px; height: 38px; border: 1px solid var(--neon); background: var(--ink); color: var(--neon);
-      font-size: 15px; cursor: pointer; opacity: 0; pointer-events: none; transform: translateY(8px); transition: opacity .25s, transform .25s; }
-    .to-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
-
-    @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } html { scroll-behavior: auto; } }
-    @media (max-width: 560px) {
-      .wrap { padding: 16px 12px 48px; }
-      .hero { padding: 26px 18px 22px; }
-      .hero h1 { font-size: 23px; }
-      .coverage-strip { grid-template-columns: repeat(2, 1fr); }
-      .sentiment-layout { grid-template-columns: 1fr; justify-items: center; } .legend { width: 100%; }
-      .source-item { grid-template-columns: 22px 1fr; } .source-item > span:last-child { grid-column: 2; justify-self: start; }
-      .trend-row { grid-template-columns: 64px 1fr 22px; gap: 7px; }
-      .colophon-author { flex-direction: column; gap: 4px; }
+    @media (max-width: 480px) {
+      .sheet { padding: 26px 14px 40px; }
+      .masthead h1 { font-size: 22px; padding: 7px 12px 8px; }
+      .stat-hero .n { font-size: 44px; }
+      .cov-grid { grid-template-columns: repeat(2, 1fr); }
+      .sentiment-layout { grid-template-columns: 104px 1fr; gap: 14px; }
+      .donut { width: 104px; height: 104px; } .donut::after { width: 64px; height: 64px; }
+      .source-item { grid-template-columns: 22px 1fr; } .source-item > .meta-badge { grid-column: 2; justify-self: start; }
     }
     '''
 
@@ -859,95 +810,109 @@ def render_html(topic: str, data: Dict[str, Any], template_name: str) -> str:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0b0c0d">
+  <meta name="theme-color" content="#e9e9e5">
   <title>章鱼 AI 全景分析</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>{css}</style>
 </head>
 <body>
-  <header class="chrome">
-    <div class="chrome-inner"><b>OCTOPUS AI</b><i>PANORAMA REPORT</i></div>
-  </header>
+  <div class="sheet">
 
-  <main class="wrap">
-    <header class="hero">
-      <div class="kicker">Octopus AI Intelligence</div>
+    <header class="masthead">
+      <div class="masthead-rule"></div>
+      <div class="kicker"><span>OCTOPUS AI</span><span>PANORAMA REPORT</span></div>
       <h1>章鱼 AI 全景分析</h1>
-      <p class="hero-sub">全网 AI 调研境内境外数据，由多个大模型混合部署。</p>
-      <div class="hero-tags"><span>主题 <b>{_escape(topic)}</b></span><span>样本 <b>{mention_count:02d} 条</b></span><span>来源 <b>{_escape(source_label)}</b></span></div>
-      <div class="hero-foot">
-        <small>Multi-model · Cross-border · Panorama</small>
-        <div class="heat-block"><b>{_escape(heat.get("heat_score", "—"))}</b><span>HEAT INDEX</span></div>
-      </div>
+      <p class="subtitle">全网 AI 调研<em>境内境外</em>数据，由多个大模型混合部署。</p>
+      <div class="meta-line"><span>本期主题 <b>{_escape(topic)}</b></span><span>样本 <b>{mention_count:02d} 条</b></span><span>来源 <b>{_escape(source_label)}</b></span></div>
     </header>
 
-    <section id="sec-overview" aria-labelledby="sec-overview-title">
-      <div class="section-head"><span class="section-num">01</span><h2 id="sec-overview-title">先看结论</h2></div>
-      <p class="section-lede">一页掌握本次抓取的规模、主导情感与需要继续观察的信号。</p>
-      <article class="note"><h3>编辑按语</h3><p>本期围绕「{_escape(topic)}」的公开信息共整理 <strong>{mention_count}</strong> 条。整体讨论主导情感为 <strong>{_escape(dominant)}</strong>，热度处于 <strong>{_escape(heat.get("heat_level", "—"))}</strong> 区间。建议先关注声量最大的渠道，再回到原始信源核验判断。</p></article>
-      <aside class="snapshot"><span class="snapshot-label">Dominant sentiment</span><strong>{_escape(dominant)}</strong><small>当前样本中的主导情绪</small></aside>
-      <div class="coverage-strip" aria-label="RSS 来源覆盖范围">
-        <div class="coverage-item"><strong>{configured_english}</strong><span>English RSS feeds</span></div>
-        <div class="coverage-item"><strong>{configured_chinese}</strong><span>中文 RSS feeds</span></div>
-        <div class="coverage-item"><strong>{successful_total}</strong><span>feeds connected</span></div>
-        <div class="coverage-item"><strong>{configured_total}</strong><span>feeds configured</span></div>
-      </div>
-      <p class="coverage-note">{_escape(coverage_note)}</p>
-      <div class="metric-grid">
-        <div class="metric accent"><span class="metric-label">Heat index</span><strong class="metric-value">{_escape(heat.get("heat_score", "—"))}</strong><span class="metric-note">{_escape(heat.get("heat_level", "—"))} 热度</span></div>
-        <div class="metric"><span class="metric-label">Mentions</span><strong class="metric-value">{mention_count}</strong><span class="metric-note">公开提及总量</span></div>
-        <div class="metric"><span class="metric-label">Neutral share</span><strong class="metric-value">{neu_pct}%</strong><span class="metric-note">中性讨论占比</span></div>
-        <div class="metric alert"><span class="metric-label">Watchlist</span><strong class="metric-value">{risk_count:02d}</strong><span class="metric-note">待跟进风险信号</span></div>
+    <section class="sec">
+      <div class="sec-head"><span class="no">01</span><h2>编辑按语</h2><span class="en">Editor's Note</span></div>
+      <p class="note-text">本期围绕「{_escape(topic)}」的公开信息共整理 <strong>{mention_count} 条</strong>。整体讨论主导情感为 <strong>{_escape(dominant)}</strong>，热度处于 <strong>{_escape(heat.get("heat_level", "—"))}</strong> 区间。建议先关注声量最大的渠道，再回到原始信源核验判断。</p>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><span class="no">02</span><h2>核心指标</h2><span class="en">Metrics</span></div>
+      <div class="stat-hero"><span class="n">{_escape(heat.get("heat_score", "—"))}</span><span class="l">Heat Index · 热度指数<i>{_escape(heat.get("heat_level", "—"))} 热度 · 综合声量与互动</i></span></div>
+      <div class="stat-grid">
+        <div class="stat-cell"><span class="n">{mention_count}</span><div class="l">Mentions · 公开提及总量</div></div>
+        <div class="stat-cell"><span class="n neon">{_escape(dominant)}</span><div class="l">Dominant · 主导情感</div></div>
+        <div class="stat-cell"><span class="n">{neu_pct}%</span><div class="l">Neutral Share · 中性占比</div></div>
+        <div class="stat-cell"><span class="n neon">{risk_count:02d}</span><div class="l">Watchlist · 风险信号</div></div>
       </div>
     </section>
 
-    <section id="sec-signal" aria-labelledby="sec-signal-title">
-      <div class="section-head"><span class="section-num">02</span><h2 id="sec-signal-title">情绪与声量分布</h2></div>
-      <p class="section-lede">分布比单一数字更重要：它揭示讨论的温度，也揭示讨论的来源。</p>
-      <article class="panel"><div class="panel-title"><h3>情感光谱</h3><span>n = {total}</span></div><div class="sentiment-layout"><div class="donut" style="--pos-deg:{pos_deg}deg;--neu-deg:{neu_end_deg}deg" role="img" aria-label="正面 {pos_pct}%，中性 {neu_pct}%，负面 {neg_pct}%"></div><div class="legend"><div class="legend-row"><span><i></i>正面</span><b>{pos} / {pos_pct}%</b></div><div class="legend-row"><span><i class="neutral"></i>中性</span><b>{neu} / {neu_pct}%</b></div><div class="legend-row"><span><i class="negative"></i>负面</span><b>{neg} / {neg_pct}%</b></div><p class="muted" style="margin:6px 0 0;font-size:10.5px;">主导：{_escape(dominant)}</p></div></div></article>
-      <article class="panel"><div class="panel-title"><h3>渠道分布</h3><span>share of mentions</span></div><div class="channel-list">{channel_bars}</div></article>
-      <article class="panel"><div class="panel-title"><h3>渠道明细</h3><span>engagement overview</span></div><table class="data-table"><thead><tr><th>平台 / 来源</th><th>提及</th><th>占比</th><th>平均互动</th></tr></thead><tbody>{channel_rows}</tbody></table></article>
+    <section class="sec">
+      <div class="sec-head"><span class="no">03</span><h2>调研覆盖</h2><span class="en">Coverage</span></div>
+      <div class="cov-grid">
+        <div class="cov-cell"><b>{configured_english}</b><span>English RSS feeds</span></div>
+        <div class="cov-cell"><b>{configured_chinese}</b><span>中文 RSS feeds</span></div>
+        <div class="cov-cell"><b>{successful_total}</b><span>Feeds connected</span></div>
+        <div class="cov-cell"><b>{configured_total}</b><span>Feeds configured</span></div>
+      </div>
+      <p class="cov-note">{_escape(coverage_note)}</p>
     </section>
 
-    <section id="sec-narrative" aria-labelledby="sec-narrative-title">
-      <div class="section-head"><span class="section-num">03</span><h2 id="sec-narrative-title">讨论正在说什么</h2></div>
-      <p class="section-lede">从趋势、关键词和风险命中词中，寻找值得进一步验证的叙事线索。</p>
-      <article class="panel"><div class="panel-title"><h3>声量趋势</h3><span>last 7 observations</span></div><div class="trend-list">{trend_bars}</div><blockquote class="pull-quote">趋势是线索，不是结论；回到信源，才是判断的开始。</blockquote></article>
-      <article class="panel"><div class="panel-title"><h3>热门关键词</h3><span>top signals</span></div><div class="keyword-cloud">{chips}</div></article>
-      <article class="panel"><div class="panel-title"><h3>风险提示</h3><span>watchlist / {risk_count:02d}</span></div><ul class="risk-list">{risk_items}</ul></article>
+    <section class="sec">
+      <div class="sec-head"><span class="no">04</span><h2>情感光谱</h2><span class="en">Sentiment · n = {total}</span></div>
+      <div class="sentiment-layout">
+        <div class="donut" style="--pos-deg:{pos_deg}deg;--neu-deg:{neu_end_deg}deg" role="img" aria-label="正面 {pos_pct}%，中性 {neu_pct}%，负面 {neg_pct}%"></div>
+        <div class="legend">
+          <div class="legend-row"><span><i></i>正面</span><b>{pos} / {pos_pct}%</b></div>
+          <div class="legend-row"><span><i class="neutral"></i>中性</span><b>{neu} / {neu_pct}%</b></div>
+          <div class="legend-row"><span><i class="negative"></i>负面</span><b>{neg} / {neg_pct}%</b></div>
+          <p class="muted" style="margin:4px 0 0;font-size:11.5px;">主导情绪：<span class="hl">{_escape(dominant)}</span></p>
+        </div>
+      </div>
     </section>
 
-    <section id="sec-evidence" aria-labelledby="sec-evidence-title">
-      <div class="section-head"><span class="section-num">04</span><h2 id="sec-evidence-title">要点与信源</h2></div>
-      <p class="section-lede">每一条摘要都应当可以被追溯。点击标题打开原始来源，继续完成核验。</p>
-      <article class="panel"><div class="panel-title"><h3>编辑要点</h3><span>key findings</span></div><ol class="finding-list">{finding_items}</ol></article>
-      <article class="panel"><div class="panel-title"><h3>信源列表</h3><span>click to verify / {mention_count} items</span></div><ul class="source-list">{source_items}</ul>{source_archive}</article>
-
-      <footer class="colophon">
-        <div class="colophon-author"><b>作者：章鱼 ai</b><span>仅供参考 · 分析研究</span></div>
-        <p>全网境内外为你寻找蛛丝马迹，提供全景视野分析，由多模型协同推理决策。底层所使用的大语言模型（LLM）多模式背后结合使用了多种不同的先进模型，包括但不限于 Claude、ChatGPT、Gemini、Grok、Qwen 以及 Kimi。根据不同的资产管理任务需求，更好地发挥各个模型的优势来提供数据支持！<em>[加油]</em></p>
-        <div class="colophon-foot"><span>Octopus AI · Panorama</span><span>{_escape(source_label)} · {_escape(generated)}</span><span>END OF BRIEF</span></div>
-      </footer>
+    <section class="sec">
+      <div class="sec-head"><span class="no">05</span><h2>渠道分布</h2><span class="en">Channels</span></div>
+      <div class="channel-list">{channel_bars}</div>
+      <table class="data-table" style="margin-top:18px;"><thead><tr><th>平台 / 来源</th><th>提及</th><th>占比</th><th>平均互动</th></tr></thead><tbody>{channel_rows}</tbody></table>
     </section>
-  </main>
 
-  <button type="button" class="to-top" aria-label="回到顶部">↑</button>
-  <script>
-    (() => {{
-      const toTop = document.querySelector('.to-top');
-      if (toTop) {{
-        const onScroll = () => toTop.classList.toggle('show', window.scrollY > 480);
-        window.addEventListener('scroll', onScroll, {{ passive: true }});
-        onScroll();
-        toTop.addEventListener('click', () => window.scrollTo({{ top: 0, behavior: 'smooth' }}));
-      }}
-    }})();
-  </script>
+    <section class="sec">
+      <div class="sec-head"><span class="no">06</span><h2>声量趋势</h2><span class="en">Trend · Last 7</span></div>
+      <div class="trend-list">{trend_bars}</div>
+      <blockquote class="pull-quote">趋势是线索，不是结论；回到信源，才是判断的开始。</blockquote>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><span class="no">07</span><h2>热门关键词</h2><span class="en">Top Signals</span></div>
+      <div class="keyword-cloud">{chips}</div>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><span class="no">08</span><h2>风险提示</h2><span class="en">Watchlist · {risk_count:02d}</span></div>
+      <ul class="risk-list">{risk_items}</ul>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><span class="no">09</span><h2>编辑要点</h2><span class="en">Key Findings</span></div>
+      <ol class="finding-list">{finding_items}</ol>
+    </section>
+
+    <section class="sec">
+      <div class="sec-head"><span class="no">10</span><h2>信源列表</h2><span class="en">Verify · {mention_count} items</span></div>
+      <ul class="source-list">{source_items}</ul>
+      {source_archive}
+    </section>
+
+    <footer class="closing">
+      <div class="closing-rule"></div>
+      <p>全网境内外为你寻找蛛丝马迹——提供<span class="hl">全景视野分析</span>，由多模型协同推理决策。底层所使用的大语言模型（LLM）多模式背后结合使用了多种不同的先进模型，包括但不限于 <span class="hl">Claude</span>、<span class="hl">ChatGPT</span>、<span class="hl">Gemini</span>、<span class="hl">Grok</span>、<span class="hl">Qwen</span> 以及 <span class="hl">Kimi</span>。根据不同的资产管理任务需求，更好地发挥各个模型的优势来提供数据支持！加油 💪</p>
+      <div class="byline"><span>作者：章鱼 ai</span><span>仅供参考，分析研究</span></div>
+      <div class="colophon">OCTOPUS AI · PANORAMA REPORT · END</div>
+    </footer>
+
+  </div>
 </body>
 </html>
 '''
+
+# ---------------------------------------------------------------------------
+# Push & CLI
+
 
 
 def render_push_content(topic: str, data: Dict[str, Any]) -> str:
@@ -957,8 +922,8 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
     blocks, ``<script>`` and external fonts, so this variant is a compact
     fragment where *every* rule is inlined on the element.  Layout relies on
     plain block elements and tables only, which WeChat renders faithfully.
-    Palette mirrors render_html(): light-gray paper #e9ebed, ink #0b0c0d,
-    neon #c6ff00; small type throughout.
+    Palette mirrors render_html(): light-gray paper #e9e9e5, ink #0c0c0d,
+    neon #b8ff2e; small type throughout.
     """
     sentiment = data.get("sentiment") or {}
     heat = data.get("heat") or {}
@@ -967,7 +932,6 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
     risks = data.get("risks") or []
     posts = data.get("posts") or []
     findings = (data.get("query_summary") or {}).get("key_findings") or []
-    generated = data.get("analysis_time") or datetime.now().strftime("%Y-%m-%d %H:%M")
     source_label = "实时 RSS 抓取" if data.get("data_source") == "rss_news" else "离线示例数据"
 
     pos = int(sentiment.get("positive", 0) or 0)
@@ -981,15 +945,16 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
     mention_count = int(heat.get("total_mentions", len(posts)) or 0)
     risk_count = len(risks)
 
-    # --- shared inline-style shorthands (e-ink palette) ---
-    INK = "#0b0c0d"
-    NEON = "#c6ff00"
-    PAPER = "#e9ebed"
-    CARD = "#f7f8f9"
-    MUTED = "#6d7378"
-    HAIR = "1px solid rgba(11,12,13,.16)"
-    MONO = "font-family:'IBM Plex Mono',Menlo,Consolas,monospace;"
-    SERIF = "font-family:'Noto Serif SC',Georgia,serif;"
+    # --- shared inline-style shorthands (e-ink Style A palette) ---
+    INK = "#0c0c0d"
+    NEON = "#b8ff2e"
+    PAPER = "#e9e9e5"
+    CARD = "rgba(255,255,255,.35)"
+    MIST = "#8a8a83"
+    HAIR = "1px solid rgba(12,12,13,.35)"
+    MONO = "font-family:'JetBrains Mono','SFMono-Regular',Menlo,Consolas,monospace;"
+    SERIF = "font-family:'Noto Serif SC','Songti SC','SimSun',Georgia,serif;"
+    SOFT = "rgba(12,12,13,.78)"
     hl = f"background:{INK};color:{NEON};padding:1px 6px;font-weight:600;"
 
     def sec_head(num: str, title: str) -> str:
@@ -1004,10 +969,10 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
         width = max(int(pct), 4)
         return (
             f'<div style="margin:0 0 9px;">'
-            f'<div style="font-size:11px;color:#33373b;margin-bottom:3px;">{label}'
+            f'<div style="font-size:11px;color:{SOFT};margin-bottom:3px;">{label}'
             f' <span style="{MONO}{hl}font-size:9px;">{value}</span></div>'
-            f'<div style="background:#dcdfe2;height:8px;border:{HAIR};">'
-            f'<div style="background:{NEON};height:8px;width:{width}%;"></div></div>'
+            f'<div style="height:8px;border:1px solid {INK};">'
+            f'<div style="background:{INK};border-right:3px solid {NEON};height:8px;width:{width}%;"></div></div>'
             f'</div>'
         )
 
@@ -1018,9 +983,9 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
         )
         return (
             f'<td style="width:50%;background:{CARD};border:{HAIR};border-top:3px solid {NEON if accent else INK};padding:10px 12px;vertical-align:top;">'
-            f'<div style="{MONO}font-size:8px;letter-spacing:1.5px;color:{MUTED};text-transform:uppercase;">{label}</div>'
+            f'<div style="{MONO}font-size:8px;letter-spacing:1.5px;color:{MIST};text-transform:uppercase;">{label}</div>'
             f'<div style="margin:6px 0 1px;"><span style="{value_style}">{value}</span></div>'
-            f'<div style="font-size:10px;color:{MUTED};">{note}</div></td>'
+            f'<div style="font-size:10px;color:{MIST};">{note}</div></td>'
         )
 
     heat_score = _escape(heat.get("heat_score", "—"))
@@ -1044,46 +1009,46 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
             f"{_escape(s.get('count', 0))} · {_escape(s.get('percentage', 0))}%",
         )
         for name, s in platform_items
-    ) or f'<p style="font-size:11px;color:{MUTED};">暂无平台数据</p>'
+    ) or f'<p style="font-size:11px;color:{MIST};">暂无平台数据</p>'
 
     # keywords chips
     chips = "".join(
         f'<span style="display:inline-block;background:{INK};color:{NEON};font-size:11px;padding:3px 10px;margin:0 6px 6px 0;">{_escape(k)}</span>'
         for k in keywords[:10]
-    ) or f'<span style="font-size:11px;color:{MUTED};">暂无关键词</span>'
+    ) or f'<span style="font-size:11px;color:{MIST};">暂无关键词</span>'
 
     # risks top 3
     risk_rows = "".join(
         f'<div style="border-bottom:{HAIR};padding:8px 0;">'
         f'<span style="{MONO}{hl}font-size:8px;">{_escape(RISK_ZH.get(r.get("risk_level"), r.get("risk_level", "低")))}</span>'
-        f'<span style="font-size:11.5px;color:#33373b;margin-left:8px;">{_escape((r.get("text_preview") or "")[:80])}</span></div>'
+        f'<span style="font-size:11.5px;color:{SOFT};margin-left:8px;">{_escape((r.get("text_preview") or "")[:80])}</span></div>'
         for r in risks[:3]
-    ) or f'<p style="font-size:11px;color:{MUTED};">未识别到明显风险信号。</p>'
+    ) or f'<p style="font-size:11px;color:{MIST};">未识别到明显风险信号。</p>'
 
     # findings
     finding_rows = "".join(
-        f'<div style="border-bottom:{HAIR};padding:8px 0;font-size:12px;color:#33373b;">'
+        f'<div style="border-bottom:{HAIR};padding:8px 0;font-size:12px;color:{SOFT};">'
         f'<span style="{MONO}{hl}font-size:8.5px;margin-right:8px;">{i:02d}</span>{_escape(f)}</div>'
         for i, f in enumerate(findings[:6], 1)
-    ) or f'<p style="font-size:11px;color:{MUTED};">暂无要点</p>'
+    ) or f'<p style="font-size:11px;color:{MIST};">暂无要点</p>'
 
     # sources top 10 (linked)
     source_rows = "".join(
         f'<div style="border-bottom:{HAIR};padding:8px 0;">'
         f'<a href="{_escape(p.get("url") or "#")}" style="font-size:12px;color:{INK};font-weight:500;text-decoration:none;">'
         f'{i:02d}. {_escape((p.get("title") or p.get("content") or "")[:60])}</a>'
-        f'<div style="{MONO}font-size:8.5px;color:{MUTED};margin-top:2px;">'
+        f'<div style="{MONO}font-size:8.5px;color:{MIST};margin-top:2px;">'
         f'{_escape("EN" if p.get("language") == "en" else "中文" if p.get("language") == "zh" else "来源")}'
         f' · {_escape(p.get("feed_name") or p.get("nickname", ""))}'
         f' · {_escape(SENTIMENT_ZH.get(p.get("sentiment", "neutral"), "中性"))}</div></div>'
         for i, p in enumerate(posts[:10], 1)
-    ) or f'<p style="font-size:11px;color:{MUTED};">暂无信源</p>'
+    ) or f'<p style="font-size:11px;color:{MIST};">暂无信源</p>'
 
     card = f'background:{CARD};border:{HAIR};padding:14px 16px;margin:0 0 10px;'
 
     return (
         f'<div style="background:{PAPER};padding:14px 12px;color:{INK};'
-        f"font-family:'Noto Sans SC',-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;"
+        f"font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Noto Sans SC','Microsoft YaHei',sans-serif;"
         f'font-size:13px;line-height:1.75;">'
 
         # --- hero (black block) ---
@@ -1092,9 +1057,9 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
         f'<div style="{SERIF}color:{NEON};font-size:24px;font-weight:700;line-height:1.25;margin:10px 0 6px;">章鱼 AI 全景分析</div>'
         f'<div style="{SERIF}color:rgba(232,234,237,.78);font-size:12.5px;">全网 AI 调研境内境外数据，由多个大模型混合部署。</div>'
         f'<div style="margin-top:12px;">'
-        f'<span style="{MONO}border:1px solid rgba(198,255,0,.4);color:{NEON};font-size:9px;padding:3px 8px;margin-right:6px;">主题 {_escape(topic)}</span>'
-        f'<span style="{MONO}border:1px solid rgba(198,255,0,.4);color:{NEON};font-size:9px;padding:3px 8px;">样本 {mention_count:02d} 条</span></div>'
-        f'<div style="border-top:1px solid rgba(198,255,0,.22);margin-top:14px;padding-top:10px;">'
+        f'<span style="{MONO}border:1px solid rgba(184,255,46,.4);color:{NEON};font-size:9px;padding:3px 8px;margin-right:6px;">主题 {_escape(topic)}</span>'
+        f'<span style="{MONO}border:1px solid rgba(184,255,46,.4);color:{NEON};font-size:9px;padding:3px 8px;">样本 {mention_count:02d} 条</span></div>'
+        f'<div style="border-top:1px solid rgba(184,255,46,.22);margin-top:14px;padding-top:10px;">'
         f'<span style="{SERIF}color:{NEON};font-size:22px;font-weight:700;">{_escape(heat.get("heat_score", "—"))}</span>'
         f'<span style="{MONO}color:rgba(232,234,237,.5);font-size:8px;letter-spacing:2px;margin-left:8px;">HEAT INDEX</span></div>'
         f'</div>'
@@ -1103,7 +1068,7 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
         f'{sec_head("01", "先看结论")}'
         f'<div style="{card}border-left:4px solid {NEON};">'
         f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:6px;">编辑按语</div>'
-        f'<div style="font-size:12.5px;color:#33373b;">本期围绕「{_escape(topic)}」的公开信息共整理'
+        f'<div style="font-size:12.5px;color:{SOFT};">本期围绕「{_escape(topic)}」的公开信息共整理'
         f' <span style="{hl}">{mention_count}</span> 条，主导情感为 <span style="{hl}">{_escape(dominant)}</span>，'
         f'热度处于 <span style="{hl}">{_escape(heat.get("heat_level", "—"))}</span> 区间。'
         f'建议先关注声量最大的渠道，再回到原始信源核验判断。</div></div>'
@@ -1112,7 +1077,7 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
         # --- 02 分布 ---
         f'{sec_head("02", "情绪与声量分布")}'
         f'<div style="{card}">'
-        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:10px;">情感光谱 <span style="{MONO}font-size:8.5px;color:{MUTED};font-weight:400;">n = {total}</span></div>'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:10px;">情感光谱 <span style="{MONO}font-size:8.5px;color:{MIST};font-weight:400;">n = {total}</span></div>'
         f'{bar(pos_pct, "正面", f"{pos} / {pos_pct}%")}'
         f'{bar(neu_pct, "中性", f"{neu} / {neu_pct}%")}'
         f'{bar(neg_pct, "负面", f"{neg} / {neg_pct}%")}</div>'
@@ -1124,18 +1089,18 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
         f'<div style="{card}">'
         f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:8px;">热门关键词</div>{chips}</div>'
         f'<div style="{card}">'
-        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:4px;">风险提示 <span style="{MONO}font-size:8.5px;color:{MUTED};font-weight:400;">watchlist / {risk_count:02d}</span></div>{risk_rows}</div>'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:4px;">风险提示 <span style="{MONO}font-size:8.5px;color:{MIST};font-weight:400;">watchlist / {risk_count:02d}</span></div>{risk_rows}</div>'
 
         # --- 04 要点与信源 ---
         f'{sec_head("04", "要点与信源")}'
         f'<div style="{card}">'
         f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:4px;">编辑要点</div>{finding_rows}</div>'
         f'<div style="{card}">'
-        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:4px;">信源列表 <span style="{MONO}font-size:8.5px;color:{MUTED};font-weight:400;">top 10 / {mention_count} items</span></div>{source_rows}</div>'
+        f'<div style="{SERIF}font-size:13px;font-weight:700;margin-bottom:4px;">信源列表 <span style="{MONO}font-size:8.5px;color:{MIST};font-weight:400;">top 10 / {mention_count} items</span></div>{source_rows}</div>'
 
         # --- colophon (black block) ---
         f'<div style="background:{INK};padding:18px 18px 14px;margin-top:18px;color:rgba(232,234,237,.82);">'
-        f'<div style="border-bottom:1px solid rgba(198,255,0,.25);padding-bottom:9px;margin-bottom:9px;">'
+        f'<div style="border-bottom:1px solid rgba(184,255,46,.25);padding-bottom:9px;margin-bottom:9px;">'
         f'<span style="{SERIF}color:{NEON};font-size:13px;font-weight:700;">作者：章鱼 ai</span>'
         f'<span style="{MONO}color:rgba(232,234,237,.55);font-size:8.5px;letter-spacing:1.5px;margin-left:10px;">仅供参考 · 分析研究</span></div>'
         f'<div style="font-size:11px;line-height:1.8;">全网境内外为你寻找蛛丝马迹，提供全景视野分析，由多模型协同推理决策。'
@@ -1144,7 +1109,7 @@ def render_push_content(topic: str, data: Dict[str, Any]) -> str:
         f'<span style="background:{NEON};color:{INK};padding:0 4px;font-weight:600;">[加油]</span></div>'
         f'<div style="{MONO}border-top:1px solid rgba(232,234,237,.14);margin-top:10px;padding-top:8px;'
         f'font-size:7.5px;letter-spacing:2px;color:rgba(232,234,237,.4);text-transform:uppercase;">'
-        f'OCTOPUS AI · PANORAMA&nbsp;&nbsp;|&nbsp;&nbsp;{_escape(source_label)} · {_escape(generated)}&nbsp;&nbsp;|&nbsp;&nbsp;END OF BRIEF</div>'
+        f'OCTOPUS AI · PANORAMA&nbsp;&nbsp;|&nbsp;&nbsp;{_escape(source_label)}&nbsp;&nbsp;|&nbsp;&nbsp;END OF BRIEF</div>'
         f'</div>'
         f'</div>'
     )
